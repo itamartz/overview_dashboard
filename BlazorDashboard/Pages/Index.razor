@@ -1,0 +1,345 @@
+@page "/"
+@using BlazorDashboard.Models
+@using BlazorDashboard.Services
+@inject IDashboardService DashboardService
+@inject ILogger<Index> Logger
+
+<PageTitle>System Overview Dashboard</PageTitle>
+
+<div class="dashboard-container">
+    <!-- Left Navigation Panel -->
+    <div class="nav-panel">
+        <div class="nav-header">
+            <h2>IT Dashboard</h2>
+            <div class="timestamp">@DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")</div>
+        </div>
+
+        <div class="nav-search">
+            <input type="text" placeholder="Search systems..." @bind="searchTerm" @bind:event="oninput" @onkeyup="FilterNavigation" />
+        </div>
+
+        @if (dashboardData != null)
+        {
+            <div class="nav-content">
+                <div class="nav-section-title">SYSTEMS</div>
+                @foreach (var system in filteredSystems)
+                {
+                    var counts = CalculateSystemSeverity(system);
+                    var worstSeverity = counts.GetWorstSeverity();
+                    
+                    <div class="nav-item @(selectedSystemId == system.SystemId ? "active" : "")" 
+                         @onclick="() => SelectSystem(system.SystemId)">
+                        <span class="nav-item-name">@system.Name</span>
+                        <span class="nav-item-badge badge-@worstSeverity">@counts.GetCount(worstSeverity)</span>
+                    </div>
+
+                    @if (selectedSystemId == system.SystemId)
+                    {
+                        @foreach (var project in system.Projects)
+                        {
+                            var projectCounts = CalculateProjectSeverity(project);
+                            var projectWorst = projectCounts.GetWorstSeverity();
+                            
+                            <div class="nav-subitem @(selectedProjectId == project.ProjectId ? "active" : "")"
+                                 @onclick="() => SelectProject(system.SystemId, project.ProjectId)">
+                                <span>@project.Name</span>
+                                <span class="nav-item-badge badge-@projectWorst" style="margin-left: 10px;">@projectCounts.GetCount(projectWorst)</span>
+                            </div>
+                        }
+                    }
+                }
+            </div>
+        }
+        else if (isLoading)
+        {
+            <div class="loading-message">Loading...</div>
+        }
+        else
+        {
+            <div class="error-message">Failed to load data</div>
+        }
+    </div>
+
+    <!-- Right Content Area -->
+    <div class="content-area">
+        @if (currentData != null && currentData.Any())
+        {
+            <div class="content-header">
+                <h1>@contentTitle</h1>
+                <p>@contentSubtitle</p>
+            </div>
+
+            <div class="controls">
+                <button @onclick="RefreshData">🔄 Refresh</button>
+                <button @onclick="() => FilterBySeverity(string.Empty)">All</button>
+                <button @onclick="() => FilterBySeverity(\"ok\")">OK</button>
+                <button @onclick="() => FilterBySeverity(\"warning\")">Warning</button>
+                <button @onclick="() => FilterBySeverity(\"error\")">Error</button>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="cards-container">
+                @{
+                    var counts = CalculateSeverityCounts(currentData);
+                }
+                <div class="summary-card">
+                    <div class="card-icon card-ok">✓</div>
+                    <div class="card-label">OK</div>
+                    <div class="card-value">@counts.Ok</div>
+                    <div class="card-subtitle">Healthy components</div>
+                </div>
+                <div class="summary-card">
+                    <div class="card-icon card-warning">⚠</div>
+                    <div class="card-label">Warning</div>
+                    <div class="card-value">@counts.Warning</div>
+                    <div class="card-subtitle">Needs attention</div>
+                </div>
+                <div class="summary-card">
+                    <div class="card-icon card-error">✕</div>
+                    <div class="card-label">Error</div>
+                    <div class="card-value">@counts.Error</div>
+                    <div class="card-subtitle">Critical issues</div>
+                </div>
+                <div class="summary-card">
+                    <div class="card-icon card-info">ℹ</div>
+                    <div class="card-label">Info</div>
+                    <div class="card-value">@counts.Info</div>
+                    <div class="card-subtitle">Informational</div>
+                </div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="data-table-container">
+                <div class="table-header">
+                    <h3>@filteredData.Count() Components</h3>
+                    <div class="last-update">Last updated: @dashboardData!.LastUpdated.ToLocalTime().ToString("HH:mm:ss")</div>
+                </div>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th>Severity</th>
+                            <th>Value</th>
+                            <th>Metric</th>
+                            <th>Description</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var component in filteredData)
+                        {
+                            <tr>
+                                <td><strong>@component.Name</strong></td>
+                                <td><span class="severity-badge severity-@component.Severity">@component.Severity</span></td>
+                                <td><strong>@component.Value</strong></td>
+                                <td><span class="metric-badge">@component.Metric</span></td>
+                                <td>@(component.MetricDescription ?? component.Description)</td>
+                                <td class="timestamp-cell">@component.LastUpdate.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (isLoading)
+        {
+            <div class="loading-container">
+                <div class="loading-spinner"></div>
+                <div>Loading dashboard data...</div>
+            </div>
+        }
+        else
+        {
+            <div class="welcome-message">
+                <h1>Welcome to IT Infrastructure Dashboard</h1>
+                <p>Select a system from the left panel to view its status</p>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private DashboardData? dashboardData;
+    private List<ComponentModel> currentData = new();
+    private List<ComponentModel> filteredData = new();
+    private List<SystemModel> filteredSystems = new();
+    private bool isLoading = true;
+    private string? selectedSystemId;
+    private string? selectedProjectId;
+    private string contentTitle = "Dashboard";
+    private string contentSubtitle = "Select a system";
+    private string searchTerm = string.Empty;
+    private string severityFilter = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+        
+        // Auto-refresh every 30 seconds
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                await Task.Delay(30000);
+                await InvokeAsync(async () =>
+                {
+                    await LoadDashboardData();
+                    StateHasChanged();
+                });
+            }
+        });
+    }
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            isLoading = true;
+            dashboardData = await DashboardService.GetDashboardDataAsync();
+            
+            if (dashboardData != null)
+            {
+                filteredSystems = dashboardData.Systems;
+                
+                // Restore selection if exists
+                if (!string.IsNullOrEmpty(selectedSystemId))
+                {
+                    if (!string.IsNullOrEmpty(selectedProjectId))
+                    {
+                        SelectProject(selectedSystemId, selectedProjectId);
+                    }
+                    else
+                    {
+                        SelectSystem(selectedSystemId);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading dashboard data");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SelectSystem(string systemId)
+    {
+        selectedSystemId = systemId;
+        selectedProjectId = null;
+        
+        var system = dashboardData?.Systems.FirstOrDefault(s => s.SystemId == systemId);
+        if (system != null)
+        {
+            currentData = system.Projects.SelectMany(p => p.Components).ToList();
+            contentTitle = system.Name;
+            contentSubtitle = "All Projects";
+            ApplyFilters();
+        }
+    }
+
+    private void SelectProject(string systemId, string projectId)
+    {
+        selectedSystemId = systemId;
+        selectedProjectId = projectId;
+        
+        var system = dashboardData?.Systems.FirstOrDefault(s => s.SystemId == systemId);
+        var project = system?.Projects.FirstOrDefault(p => p.ProjectId == projectId);
+        
+        if (project != null)
+        {
+            currentData = project.Components.ToList();
+            contentTitle = $"{system!.Name} - {project.Name}";
+            contentSubtitle = project.Name;
+            ApplyFilters();
+        }
+    }
+
+    private void FilterNavigation()
+    {
+        if (dashboardData == null) return;
+        
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredSystems = dashboardData.Systems;
+        }
+        else
+        {
+            var term = searchTerm.ToLower();
+            filteredSystems = dashboardData.Systems
+                .Where(s => s.Name.ToLower().Contains(term) || 
+                           s.Projects.Any(p => p.Name.ToLower().Contains(term)))
+                .ToList();
+        }
+    }
+
+    private void FilterBySeverity(string severity)
+    {
+        severityFilter = severity;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        if (string.IsNullOrEmpty(severityFilter))
+        {
+            filteredData = currentData.ToList();
+        }
+        else
+        {
+            filteredData = currentData.Where(c => c.Severity == severityFilter).ToList();
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadDashboardData();
+    }
+
+    private SeverityCounts CalculateSystemSeverity(SystemModel system)
+    {
+        var counts = new SeverityCounts();
+        foreach (var project in system.Projects)
+        {
+            foreach (var component in project.Components)
+            {
+                IncrementSeverityCount(counts, component.Severity);
+            }
+        }
+        return counts;
+    }
+
+    private SeverityCounts CalculateProjectSeverity(ProjectModel project)
+    {
+        var counts = new SeverityCounts();
+        foreach (var component in project.Components)
+        {
+            IncrementSeverityCount(counts, component.Severity);
+        }
+        return counts;
+    }
+
+    private SeverityCounts CalculateSeverityCounts(List<ComponentModel> components)
+    {
+        var counts = new SeverityCounts();
+        foreach (var component in components)
+        {
+            IncrementSeverityCount(counts, component.Severity);
+        }
+        return counts;
+    }
+
+    private void IncrementSeverityCount(SeverityCounts counts, string severity)
+    {
+        switch (severity.ToLower())
+        {
+            case "ok": counts.Ok++; break;
+            case "warning": counts.Warning++; break;
+            case "error": counts.Error++; break;
+            case "info": counts.Info++; break;
+        }
+    }
+}
