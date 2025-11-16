@@ -2,6 +2,9 @@
 
 A real-time monitoring dashboard for IT infrastructure built with **Blazor Server**, **ASP.NET Core Web API**, and **Entity Framework Core with SQLite**. Designed for air-gapped environments with no developer required for maintenance.
 
+<img width="1920" height="911" alt="image" src="https://github.com/user-attachments/assets/4de22152-ca77-4f25-9cc7-bb8906e31f1c" />
+
+
 ## 🎯 Features
 
 - ✅ **Real-time Updates** - SignalR-based live dashboard without page refresh
