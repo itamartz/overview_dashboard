@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet ef database update:*)",
+      "Bash(dotnet run:*)",
+      "Bash(timeout /t 5)",
+      "Bash(start http://localhost:5001)",
+      "Bash(dotnet new:*)",
+      "Bash(dotnet add package:*)",
+      "Bash(start http://localhost:5203)",
+      "Bash(powershell -Command \"$body = @{ name = ''Test Database Server''; severity = ''ok''; value = 98.5; metric = ''Uptime %''; description = ''Database running perfectly''; projectName = ''Infrastructure''; systemName = ''Production Environment'' } | ConvertTo-Json; Invoke-RestMethod -Uri ''http://localhost:5203/api/components'' -Method Post -Body $body -ContentType ''application/json'' | ConvertTo-Json\")",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)",
+      "Bash(nul)",
+      "Bash(exit 0)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

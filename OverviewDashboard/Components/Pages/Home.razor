@@ -1,0 +1,336 @@
+@page "/"
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.EntityFrameworkCore
+@using OverviewDashboard.Data
+@using OverviewDashboard.Models
+@inject IServiceScopeFactory ScopeFactory
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+
+<PageTitle>System Overview Dashboard</PageTitle>
+
+<div class="dashboard-container">
+    <!-- Left Navigation Panel -->
+    <div class="nav-panel">
+        <div class="nav-header">
+            <h2>Systems Overview</h2>
+            <div class="timestamp">@DateTime.Now.ToString("T")</div>
+        </div>
+
+        <div class="nav-search">
+            <input type="text" placeholder="Search systems..." @bind="searchTerm" @bind:event="oninput" />
+        </div>
+
+        <div class="nav-content">
+            @foreach (var system in filteredSystems)
+            {
+                var counts = CalculateSystemSeverity(system);
+                var worstSeverity = GetWorstSeverity(counts);
+
+                <div class="nav-item @(selectedSystemId == system.Id ? "active" : "")" @onclick="() => SelectSystem(system.Id)">
+                    <span class="nav-item-name">@system.Name</span>
+                    <span class="nav-item-badge badge-@worstSeverity">@counts[worstSeverity]</span>
+                </div>
+
+                @foreach (var project in system.Projects)
+                {
+                    var projectCounts = CalculateProjectSeverity(project);
+                    var projectWorst = GetWorstSeverity(projectCounts);
+
+                    <div class="nav-subitem @(selectedProjectId == project.Id ? "active" : "")" @onclick="() => SelectProject(system.Id, project.Id)">
+                        <span>@project.Name</span>
+                        <span class="nav-item-badge badge-@projectWorst" style="margin-left: 10px;">@projectCounts[projectWorst]</span>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Right Content Area -->
+    <div class="content-area">
+        <div class="content-header">
+            <h1>@contentTitle</h1>
+            <p>@contentSubtitle</p>
+        </div>
+
+        @if (currentComponents != null && currentComponents.Any())
+        {
+            <div class="controls">
+                <button @onclick="RefreshData">🔄 Refresh</button>
+                <button @onclick="() => FilterBySeverity(string.Empty)">All</button>
+                <button @onclick='() => FilterBySeverity("error")'>Errors Only</button>
+                <button @onclick='() => FilterBySeverity("warning")'>Warnings Only</button>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="cards-container">
+                @{
+                    var counts = new Dictionary<string, int> { { "ok", 0 }, { "warning", 0 }, { "error", 0 }, { "info", 0 } };
+                    foreach (var c in currentComponents)
+                    {
+                        if (counts.ContainsKey(c.Severity.ToLower()))
+                            counts[c.Severity.ToLower()]++;
+                    }
+                }
+
+                <div class="summary-card">
+                    <div class="card-icon card-ok">✓</div>
+                    <div class="card-label">OK</div>
+                    <div class="card-value">@counts["ok"]</div>
+                    <div class="card-subtitle">Healthy components</div>
+                </div>
+
+                <div class="summary-card">
+                    <div class="card-icon card-warning">⚠</div>
+                    <div class="card-label">Warning</div>
+                    <div class="card-value">@counts["warning"]</div>
+                    <div class="card-subtitle">Needs attention</div>
+                </div>
+
+                <div class="summary-card">
+                    <div class="card-icon card-error">✕</div>
+                    <div class="card-label">Error</div>
+                    <div class="card-value">@counts["error"]</div>
+                    <div class="card-subtitle">Critical issues</div>
+                </div>
+
+                <div class="summary-card">
+                    <div class="card-icon card-info">ℹ</div>
+                    <div class="card-label">Info</div>
+                    <div class="card-value">@counts["info"]</div>
+                    <div class="card-subtitle">Informational</div>
+                </div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>@filteredComponents.Count Components</h3>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th>Severity</th>
+                            <th>Value</th>
+                            <th>Metric</th>
+                            <th>Description</th>
+                            <th>Last Updated</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var component in filteredComponents)
+                        {
+                            <tr>
+                                <td><strong>@component.Name</strong></td>
+                                <td><span class="severity-badge severity-@component.Severity.ToLower()">@component.Severity.ToUpper()</span></td>
+                                <td><strong>@component.Value</strong></td>
+                                <td><span class="metric-badge">@component.Metric</span></td>
+                                <td>@component.Description</td>
+                                <td class="timestamp-cell">@GetRelativeTime(component.LastUpdate)</td>
+                                <td>
+                                    <button class="delete-btn" @onclick="() => DeleteComponent(component.Id)">🗑️</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <p>Select a system or project from the left navigation to view components.</p>
+        }
+    </div>
+</div>
+
+@code {
+    private List<SystemEntity> systems = new();
+    private List<SystemEntity> filteredSystems = new();
+    private List<Component> currentComponents = new();
+    private List<Component> filteredComponents = new();
+
+    private int? selectedSystemId;
+    private int? selectedProjectId;
+    private string _searchTerm = string.Empty;
+    private string searchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            _searchTerm = value;
+            FilterNavigation();
+        }
+    }
+    private string contentTitle = "Select a System";
+    private string contentSubtitle = "Choose a system or project from the left navigation";
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+
+        // Setup SignalR connection
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/dashboardhub"))
+            .Build();
+
+        _hubConnection.On("DataChanged", async () =>
+        {
+            await RefreshData();
+            StateHasChanged();
+        });
+
+        await _hubConnection.StartAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        using var scope = ScopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+
+        systems = await dbContext.Systems
+            .Include(s => s.Projects)
+            .ThenInclude(p => p.Components)
+            .ToListAsync();
+        filteredSystems = systems;
+    }
+
+    private void FilterNavigation()
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            filteredSystems = systems;
+        }
+        else
+        {
+            filteredSystems = systems.Where(s =>
+                s.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                s.Projects.Any(p => p.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+        }
+        StateHasChanged();
+    }
+
+    private void SelectSystem(int systemId)
+    {
+        selectedSystemId = systemId;
+        selectedProjectId = null;
+        var system = systems.FirstOrDefault(s => s.Id == systemId);
+        if (system != null)
+        {
+            contentTitle = system.Name;
+            contentSubtitle = "All Projects";
+            currentComponents = system.Projects.SelectMany(p => p.Components).ToList();
+            filteredComponents = currentComponents;
+        }
+    }
+
+    private void SelectProject(int systemId, int projectId)
+    {
+        selectedSystemId = systemId;
+        selectedProjectId = projectId;
+        var system = systems.FirstOrDefault(s => s.Id == systemId);
+        var project = system?.Projects.FirstOrDefault(p => p.Id == projectId);
+        if (project != null)
+        {
+            contentTitle = $"{system!.Name} - {project.Name}";
+            contentSubtitle = project.Name;
+            currentComponents = project.Components.ToList();
+            filteredComponents = currentComponents;
+        }
+    }
+
+    private void FilterBySeverity(string severity)
+    {
+        if (string.IsNullOrEmpty(severity))
+        {
+            filteredComponents = currentComponents;
+        }
+        else
+        {
+            filteredComponents = currentComponents.Where(c => c.Severity.Equals(severity, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadData();
+        if (selectedProjectId.HasValue)
+        {
+            SelectProject(selectedSystemId!.Value, selectedProjectId.Value);
+        }
+        else if (selectedSystemId.HasValue)
+        {
+            SelectSystem(selectedSystemId.Value);
+        }
+    }
+
+    private async Task DeleteComponent(int id)
+    {
+        using var scope = ScopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+
+        var component = await dbContext.Components.FindAsync(id);
+        if (component != null)
+        {
+            dbContext.Components.Remove(component);
+            await dbContext.SaveChangesAsync();
+            await RefreshData();
+        }
+    }
+
+    private Dictionary<string, int> CalculateSystemSeverity(SystemEntity system)
+    {
+        var counts = new Dictionary<string, int> { { "ok", 0 }, { "warning", 0 }, { "error", 0 }, { "info", 0 } };
+        foreach (var project in system.Projects)
+        {
+            foreach (var component in project.Components)
+            {
+                var severity = component.Severity.ToLower();
+                if (counts.ContainsKey(severity))
+                    counts[severity]++;
+            }
+        }
+        return counts;
+    }
+
+    private Dictionary<string, int> CalculateProjectSeverity(Project project)
+    {
+        var counts = new Dictionary<string, int> { { "ok", 0 }, { "warning", 0 }, { "error", 0 }, { "info", 0 } };
+        foreach (var component in project.Components)
+        {
+            var severity = component.Severity.ToLower();
+            if (counts.ContainsKey(severity))
+                counts[severity]++;
+        }
+        return counts;
+    }
+
+    private string GetWorstSeverity(Dictionary<string, int> counts)
+    {
+        if (counts["error"] > 0) return "error";
+        if (counts["warning"] > 0) return "warning";
+        if (counts["info"] > 0) return "info";
+        return "ok";
+    }
+
+    private string GetRelativeTime(DateTime dateTime)
+    {
+        var span = DateTime.UtcNow - dateTime;
+        if (span.TotalMinutes < 1) return "Just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes} min ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours} hour{((int)span.TotalHours > 1 ? "s" : "")} ago";
+        return $"{(int)span.TotalDays} day{((int)span.TotalDays > 1 ? "s" : "")} ago";
+    }
+}
