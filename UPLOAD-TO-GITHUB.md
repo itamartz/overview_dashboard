@@ -53,7 +53,7 @@ git push -u origin main
 
 When prompted:
 - **Username:** `itamartz`
-- **Password:** Your Personal Access Token `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`
+- **Password:** Your Personal Access Token `ghp_1tn`
 
 ✅ **Done!** Your code is now on GitHub at:
 https://github.com/itamartz/overview_dashboard
@@ -127,7 +127,7 @@ If Git isn't working, upload files manually via GitHub website:
 
 I can see your token in the conversation:
 ```
-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
+ghp_1tn
 ```
 
 **Security Recommendations:**
@@ -144,7 +144,7 @@ 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
 
 ```powershell
 Username: itamartz
-Password: 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  ← Use this, not your GitHub password
+Password: ghp_1t ← Use this, not your GitHub password
 ```
 
 ### If Repository Already Has Content
@@ -282,4 +282,4 @@ Once uploaded, you can:
 ---
 
 **Repository:** https://github.com/itamartz/overview_dashboard
-**Token (keep private):** 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
+**Token (keep private):** ghp_1tn
