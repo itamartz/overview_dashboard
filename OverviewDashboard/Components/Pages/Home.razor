@@ -1,10 +1,8 @@
 @page "/"
-@using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.EntityFrameworkCore
 @using OverviewDashboard.Data
 @using OverviewDashboard.Models
 @inject IServiceScopeFactory ScopeFactory
-@inject NavigationManager Navigation
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 
@@ -18,9 +16,9 @@
             <div class="timestamp">@DateTime.Now.ToString("T")</div>
         </div>
 
-        <div class="nav-search">
+        @* <div class="nav-search">
             <input type="text" placeholder="Search systems..." @bind="searchTerm" @bind:event="oninput" />
-        </div>
+        </div> *@
 
         <div class="nav-content">
             @foreach (var system in filteredSystems)
@@ -28,9 +26,12 @@
                 var counts = CalculateSystemSeverity(system);
                 var worstSeverity = GetWorstSeverity(counts);
 
-                <div class="nav-item @(selectedSystemId == system.Id ? "active" : "")" @onclick="() => SelectSystem(system.Id)">
-                    <span class="nav-item-name">@system.Name</span>
-                    <span class="nav-item-badge badge-@worstSeverity">@counts[worstSeverity]</span>
+                <div class="nav-item @(selectedSystemId == system.Id ? "active" : "")">
+                    <span class="nav-item-name" @onclick="() => SelectSystem(system.Id)">@system.Name</span>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <span class="nav-item-badge badge-@worstSeverity">@counts[worstSeverity]</span>
+                        <button class="delete-btn-small" @onclick="() => DeleteSystem(system.Id)" @onclick:stopPropagation="true">🗑️</button>
+                    </div>
                 </div>
 
                 @foreach (var project in system.Projects)
@@ -38,9 +39,12 @@
                     var projectCounts = CalculateProjectSeverity(project);
                     var projectWorst = GetWorstSeverity(projectCounts);
 
-                    <div class="nav-subitem @(selectedProjectId == project.Id ? "active" : "")" @onclick="() => SelectProject(system.Id, project.Id)">
-                        <span>@project.Name</span>
-                        <span class="nav-item-badge badge-@projectWorst" style="margin-left: 10px;">@projectCounts[projectWorst]</span>
+                    <div class="nav-subitem @(selectedProjectId == project.Id ? "active" : "")">
+                        <span @onclick="() => SelectProject(system.Id, project.Id)">@project.Name</span>
+                        <div style="display: flex; gap: 5px; align-items: center;">
+                            <span class="nav-item-badge badge-@projectWorst">@projectCounts[projectWorst]</span>
+                            <button class="delete-btn-small" @onclick="() => DeleteProject(project.Id)" @onclick:stopPropagation="true">🗑️</button>
+                        </div>
                     </div>
                 }
             }
@@ -166,31 +170,28 @@
     }
     private string contentTitle = "Select a System";
     private string contentSubtitle = "Choose a system or project from the left navigation";
-    private HubConnection? _hubConnection;
+    private System.Threading.Timer? _timer;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
 
-        // Setup SignalR connection
-        _hubConnection = new HubConnectionBuilder()
-            .WithUrl(Navigation.ToAbsoluteUri("/dashboardhub"))
-            .Build();
-
-        _hubConnection.On("DataChanged", async () =>
+        // Setup auto-refresh timer (every 5 seconds)
+        _timer = new System.Threading.Timer(async _ =>
         {
-            await RefreshData();
-            StateHasChanged();
-        });
-
-        await _hubConnection.StartAsync();
+            await InvokeAsync(async () =>
+            {
+                await RefreshData();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_hubConnection is not null)
+        if (_timer is not null)
         {
-            await _hubConnection.DisposeAsync();
+            await _timer.DisposeAsync();
         }
     }
 
@@ -286,6 +287,64 @@
         {
             dbContext.Components.Remove(component);
             await dbContext.SaveChangesAsync();
+            await RefreshData();
+        }
+    }
+
+    private async Task DeleteSystem(int id)
+    {
+        using var scope = ScopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+
+        var system = await dbContext.Systems
+            .Include(s => s.Projects)
+            .ThenInclude(p => p.Components)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (system != null)
+        {
+            dbContext.Systems.Remove(system);
+            await dbContext.SaveChangesAsync();
+
+            // Clear selection if deleted system was selected
+            if (selectedSystemId == id)
+            {
+                selectedSystemId = null;
+                selectedProjectId = null;
+                currentComponents = new();
+                filteredComponents = new();
+                contentTitle = "Select a System";
+                contentSubtitle = "Choose a system or project from the left navigation";
+            }
+
+            await RefreshData();
+        }
+    }
+
+    private async Task DeleteProject(int id)
+    {
+        using var scope = ScopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+
+        var project = await dbContext.Projects
+            .Include(p => p.Components)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (project != null)
+        {
+            dbContext.Projects.Remove(project);
+            await dbContext.SaveChangesAsync();
+
+            // Clear selection if deleted project was selected
+            if (selectedProjectId == id)
+            {
+                selectedProjectId = null;
+                if (selectedSystemId.HasValue)
+                {
+                    SelectSystem(selectedSystemId.Value);
+                }
+            }
+
             await RefreshData();
         }
     }

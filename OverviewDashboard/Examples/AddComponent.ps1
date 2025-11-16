@@ -36,15 +36,32 @@ $response2 = Invoke-RestMethod -Uri $apiUrl -Method Post -Body $newSystemCompone
 Write-Host "`nNew system and component added!" -ForegroundColor Green
 Write-Host "Response: $($response2 | ConvertTo-Json -Depth 3)"
 
+while ($true)
+{
+  $newSystemComponent3 = @{
+      name = "ESXI01" + (Get-Random -Minimum 85 -Maximum 97)
+      severity = "Error"
+      value = (Get-Random -Minimum 85 -Maximum 97)
+      metric = "CPU %"
+      description = "High CPU usage detected"
+      projectName = "ESXI"
+      systemName = "vCenter"
+  } | ConvertTo-Json
 
-$newSystemComponent3 = @{
-    name = "Web Server 02"
-    severity = "Error"
-    value = 98.0
-    metric = "CPU %"
-    description = "High CPU usage detected"
-    projectName = "vCenter"
-    systemName = "ESXI"
-} | ConvertTo-Json
+  $response3 = Invoke-RestMethod -Uri $apiUrl -Method Post -Body $newSystemComponent3 -ContentType "application/json"
+  $response3
+  Start-Sleep -Seconds 6
+}
 
-$response3 = Invoke-RestMethod -Uri $apiUrl -Method Post -Body $newSystemComponent3 -ContentType "application/json"
+  $newSystemComponent3 = @{
+      name = "ESXI01" + (Get-Random -Minimum 85 -Maximum 97)
+      severity = "OK"
+      value = 1
+      metric = "CPU %"
+      description = "Normal CPU usage detected"
+      projectName = "ESXI"
+      systemName = "vCenter"
+  } | ConvertTo-Json
+
+  $response3 = Invoke-RestMethod -Uri $apiUrl -Method Post -Body $newSystemComponent3 -ContentType "application/json"
+  $response3

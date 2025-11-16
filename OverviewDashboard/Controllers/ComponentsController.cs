@@ -1,30 +1,35 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using OverviewDashboard.Data;
 using OverviewDashboard.DTOs;
-using OverviewDashboard.Hubs;
 using OverviewDashboard.Models;
 
 namespace OverviewDashboard.Controllers
 {
+    /// <summary>
+    /// API Controller for managing monitoring components in the IT infrastructure dashboard
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
+    [Produces("application/json")]
     public class ComponentsController : ControllerBase
     {
         private readonly DashboardDbContext _context;
         private readonly ILogger<ComponentsController> _logger;
-        private readonly IHubContext<DashboardHub> _hubContext;
 
-        public ComponentsController(DashboardDbContext context, ILogger<ComponentsController> logger, IHubContext<DashboardHub> hubContext)
+        public ComponentsController(DashboardDbContext context, ILogger<ComponentsController> logger)
         {
             _context = context;
             _logger = logger;
-            _hubContext = hubContext;
         }
 
-        // GET: api/components
+        /// <summary>
+        /// Get all components with their related project and system information
+        /// </summary>
+        /// <returns>A list of all components</returns>
+        /// <response code="200">Returns the list of components</response>
         [HttpGet]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<ActionResult<IEnumerable<Component>>> GetAll()
         {
             return await _context.Components
@@ -33,8 +38,16 @@ namespace OverviewDashboard.Controllers
                 .ToListAsync();
         }
 
-        // GET: api/components/{id}
+        /// <summary>
+        /// Get a specific component by ID
+        /// </summary>
+        /// <param name="id">The component ID</param>
+        /// <returns>The requested component</returns>
+        /// <response code="200">Returns the component</response>
+        /// <response code="404">If the component is not found</response>
         [HttpGet("{id}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<Component>> GetById(int id)
         {
             var component = await _context.Components
@@ -50,8 +63,78 @@ namespace OverviewDashboard.Controllers
             return component;
         }
 
-        // POST: api/components
+        /// <summary>
+        /// Create or update a component
+        /// </summary>
+        /// <param name="dto">Component data including system and project names</param>
+        /// <returns>The created or updated component</returns>
+        /// <remarks>
+        /// Sample requests for each severity level:
+        ///
+        /// Example 1 - "ok" severity (green status):
+        ///
+        ///     POST /api/components
+        ///     {
+        ///        "name": "Database Server",
+        ///        "severity": "ok",
+        ///        "value": 98.5,
+        ///        "metric": "Uptime %",
+        ///        "description": "Primary database server running smoothly",
+        ///        "projectName": "Backend Services",
+        ///        "systemName": "Production Environment"
+        ///     }
+        ///
+        /// Example 2 - "warning" severity (yellow/orange status):
+        ///
+        ///     POST /api/components
+        ///     {
+        ///        "name": "API Gateway",
+        ///        "severity": "warning",
+        ///        "value": 85.2,
+        ///        "metric": "CPU Usage %",
+        ///        "description": "CPU usage is approaching threshold",
+        ///        "projectName": "Backend Services",
+        ///        "systemName": "Production Environment"
+        ///     }
+        ///
+        /// Example 3 - "error" severity (red status):
+        ///
+        ///     POST /api/components
+        ///     {
+        ///        "name": "Payment Service",
+        ///        "severity": "error",
+        ///        "value": 0,
+        ///        "metric": "Status",
+        ///        "description": "Service is down and not responding",
+        ///        "projectName": "Backend Services",
+        ///        "systemName": "Production Environment"
+        ///     }
+        ///
+        /// Example 4 - "info" severity (blue status):
+        ///
+        ///     POST /api/components
+        ///     {
+        ///        "name": "Deployment Pipeline",
+        ///        "severity": "info",
+        ///        "value": 1,
+        ///        "metric": "Active Deployments",
+        ///        "description": "Deployment in progress to staging environment",
+        ///        "projectName": "DevOps",
+        ///        "systemName": "CI/CD"
+        ///     }
+        ///
+        /// If a component with the same name exists in the specified project, it will be updated.
+        /// If the system or project doesn't exist, they will be automatically created.
+        ///
+        /// Valid severity values: ok, warning, error, info
+        /// </remarks>
+        /// <response code="200">Component updated successfully</response>
+        /// <response code="201">Component created successfully</response>
+        /// <response code="500">Internal server error</response>
         [HttpPost]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<Component>> Create([FromBody] ComponentDto dto)
         {
             try
@@ -102,9 +185,6 @@ namespace OverviewDashboard.Controllers
 
                     _logger.LogInformation("Updated component: {Name}", dto.Name);
 
-                    // Notify all connected clients
-                    await _hubContext.Clients.All.SendAsync("DataChanged");
-
                     return Ok(new
                     {
                         message = "Component updated successfully",
@@ -132,9 +212,6 @@ namespace OverviewDashboard.Controllers
 
                     _logger.LogInformation("Created component: {Name}", dto.Name);
 
-                    // Notify all connected clients
-                    await _hubContext.Clients.All.SendAsync("DataChanged");
-
                     return CreatedAtAction(nameof(GetById), new { id = component.Id }, new
                     {
                         message = "Component created successfully",
@@ -153,8 +230,16 @@ namespace OverviewDashboard.Controllers
             }
         }
 
-        // DELETE: api/components/{id}
+        /// <summary>
+        /// Delete a component by ID
+        /// </summary>
+        /// <param name="id">The component ID to delete</param>
+        /// <returns>No content</returns>
+        /// <response code="204">Component successfully deleted</response>
+        /// <response code="404">Component not found</response>
         [HttpDelete("{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Delete(int id)
         {
             var component = await _context.Components.FindAsync(id);
@@ -170,8 +255,21 @@ namespace OverviewDashboard.Controllers
             return NoContent();
         }
 
-        // GET: api/components/dashboard - Get hierarchical data for dashboard
+        /// <summary>
+        /// Get complete hierarchical dashboard data (Systems > Projects > Components)
+        /// </summary>
+        /// <returns>All systems with their nested projects and components</returns>
+        /// <remarks>
+        /// Returns the entire hierarchical structure of the dashboard data:
+        /// - Systems (top level)
+        ///   - Projects (nested under systems)
+        ///     - Components (nested under projects)
+        ///
+        /// This endpoint is useful for loading the complete dashboard structure in one request.
+        /// </remarks>
+        /// <response code="200">Returns the complete hierarchical data</response>
         [HttpGet("dashboard")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<ActionResult<object>> GetDashboardData()
         {
             var systems = await _context.Systems

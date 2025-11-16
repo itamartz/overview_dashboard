@@ -8,15 +8,21 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Add SignalR
-builder.Services.AddSignalR();
-
 // Add API Controllers
 builder.Services.AddControllers();
 
 // Add Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    // Include XML comments
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+    {
+        c.IncludeXmlComments(xmlPath);
+    }
+});
 
 // Add DbContext with SQLite
 builder.Services.AddDbContext<DashboardDbContext>(options =>
@@ -50,9 +56,6 @@ app.MapStaticAssets();
 
 // Map API Controllers
 app.MapControllers();
-
-// Map SignalR Hub
-app.MapHub<OverviewDashboard.Hubs.DashboardHub>("/dashboardhub");
 
 // Map Blazor Components
 app.MapRazorComponents<App>()
