@@ -60,13 +60,6 @@
 
         @if (currentComponents != null && currentComponents.Any())
         {
-            <div class="controls">
-                <button @onclick="RefreshData">🔄 Refresh</button>
-                <button @onclick="() => FilterBySeverity(string.Empty)">All</button>
-                <button @onclick='() => FilterBySeverity("error")'>Errors Only</button>
-                <button @onclick='() => FilterBySeverity("warning")'>Warnings Only</button>
-            </div>
-
             <!-- Summary Cards -->
             <div class="cards-container">
                 @{
@@ -78,29 +71,29 @@
                     }
                 }
 
-                <div class="summary-card">
-                    <div class="card-icon card-ok">✓</div>
+                <div class="summary-card card-ok @(activeFilter == "ok" ? "active" : "")" @onclick='() => FilterBySeverity("ok")'>
+                    <div class="card-icon-bg">✓</div>
                     <div class="card-label">OK</div>
                     <div class="card-value">@counts["ok"]</div>
                     <div class="card-subtitle">Healthy components</div>
                 </div>
 
-                <div class="summary-card">
-                    <div class="card-icon card-warning">⚠</div>
+                <div class="summary-card card-warning @(activeFilter == "warning" ? "active" : "")" @onclick='() => FilterBySeverity("warning")'>
+                    <div class="card-icon-bg">⚠</div>
                     <div class="card-label">Warning</div>
                     <div class="card-value">@counts["warning"]</div>
                     <div class="card-subtitle">Needs attention</div>
                 </div>
 
-                <div class="summary-card">
-                    <div class="card-icon card-error">✕</div>
+                <div class="summary-card card-error @(activeFilter == "error" ? "active" : "")" @onclick='() => FilterBySeverity("error")'>
+                    <div class="card-icon-bg">✕</div>
                     <div class="card-label">Error</div>
                     <div class="card-value">@counts["error"]</div>
                     <div class="card-subtitle">Critical issues</div>
                 </div>
 
-                <div class="summary-card">
-                    <div class="card-icon card-info">ℹ</div>
+                <div class="summary-card card-info @(activeFilter == "info" ? "active" : "")" @onclick='() => FilterBySeverity("info")'>
+                    <div class="card-icon-bg">ℹ</div>
                     <div class="card-label">Info</div>
                     <div class="card-value">@counts["info"]</div>
                     <div class="card-subtitle">Informational</div>
@@ -159,6 +152,7 @@
     private int? selectedSystemId;
     private int? selectedProjectId;
     private string _searchTerm = string.Empty;
+    private string activeFilter = string.Empty;
     private string searchTerm
     {
         get => _searchTerm;
@@ -227,6 +221,7 @@
     {
         selectedSystemId = systemId;
         selectedProjectId = null;
+        activeFilter = string.Empty;
         var system = systems.FirstOrDefault(s => s.Id == systemId);
         if (system != null)
         {
@@ -241,6 +236,7 @@
     {
         selectedSystemId = systemId;
         selectedProjectId = projectId;
+        activeFilter = string.Empty;
         var system = systems.FirstOrDefault(s => s.Id == systemId);
         var project = system?.Projects.FirstOrDefault(p => p.Id == projectId);
         if (project != null)
@@ -254,12 +250,15 @@
 
     private void FilterBySeverity(string severity)
     {
-        if (string.IsNullOrEmpty(severity))
+        // Toggle filter if clicking the same card again
+        if (activeFilter == severity)
         {
+            activeFilter = string.Empty;
             filteredComponents = currentComponents;
         }
         else
         {
+            activeFilter = severity;
             filteredComponents = currentComponents.Where(c => c.Severity.Equals(severity, StringComparison.OrdinalIgnoreCase)).ToList();
         }
     }
