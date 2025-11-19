@@ -133,3 +133,6 @@ yarn-error.log*
 
 # Rider
 .idea/
+
+# Claude code
+settings.local.json
