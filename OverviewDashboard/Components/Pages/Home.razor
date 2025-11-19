@@ -406,19 +406,31 @@
                 : components.OrderByDescending(c => c.CreatedAt).ToList();
         }
         
-        // Sort by payload field
-        var sorted = components.Select(c => new
+        // Prepare data for sorting
+        var items = components.Select(c => 
         {
-            Component = c,
-            Payload = ParsePayload(c.Payload),
-            SortValue = ParsePayload(c.Payload).TryGetValue(column, out var val) ? val.ToString() : ""
-        });
+            var payload = ParsePayload(c.Payload);
+            string? strVal = payload.TryGetValue(column, out var val) ? val?.ToString() : null;
+            bool isNum = double.TryParse(strVal, out double numVal);
+            return new { Component = c, StrValue = strVal, NumValue = isNum ? (double?)numVal : null };
+        }).ToList();
 
-        sorted = ascending
-            ? sorted.OrderBy(x => x.SortValue)
-            : sorted.OrderByDescending(x => x.SortValue);
+        // Check if the column should be treated as numeric
+        // We treat it as numeric if all non-null values are numeric
+        var nonNullItems = items.Where(x => x.StrValue != null).ToList();
+        bool isNumeric = nonNullItems.Any() && nonNullItems.All(x => x.NumValue.HasValue);
 
-        return sorted.Select(x => x.Component).ToList();
+        if (isNumeric)
+        {
+            return ascending 
+                ? items.OrderBy(x => x.NumValue).Select(x => x.Component).ToList()
+                : items.OrderByDescending(x => x.NumValue).Select(x => x.Component).ToList();
+        }
+
+        // Fallback to string sort
+        return ascending 
+            ? items.OrderBy(x => x.StrValue).Select(x => x.Component).ToList()
+            : items.OrderByDescending(x => x.StrValue).Select(x => x.Component).ToList();
     }
 
     private async Task DeleteComponent(int id)
