@@ -1,41 +1,19 @@
-# 📚 IT Infrastructure Dashboard - Documentation Index
+# 📚 Overview Dashboard - Documentation Index
 
 ## 🎯 Start Here!
 
-Welcome! This is your complete IT Infrastructure Monitoring Dashboard system. Here's where to find everything:
+Welcome to the Overview Dashboard - a real-time IT infrastructure monitoring system built with .NET 9.0 and Blazor Server.
 
 ---
 
-## 📦 What Did You Get?
+## 📦 What Is This?
 
-### Files in This Package:
-
-1. **IT-Dashboard-Complete.tar.gz** (71 KB)
-   - Complete source code archive
-   - Extract this first!
-
-2. **PROJECT-SUMMARY.md** (This file you should read first!)
-   - What's included
-   - Technology stack
-   - Requirements met
-   - Next steps
-
-3. **UPLOAD-TO-GITHUB.md** (Read second)
-   - How to push code to your GitHub repo
-   - Step-by-step instructions
-   - Troubleshooting tips
-
-4. **QUICK-START.md** (For quick reference)
-   - 5-minute local setup
-   - Common tasks
-   - API endpoints
-   - Troubleshooting
-
-5. **DEPLOYMENT-GUIDE.md** (For production deployment)
-   - Complete IIS deployment
-   - PowerShell agent installation
-   - Security configuration
-   - Maintenance procedures
+A complete monitoring dashboard with:
+- **Real-time updates** via SignalR
+- **REST API** with Swagger documentation
+- **Docker deployment** via GitHub Actions
+- **Windows Service** support
+- **SQLite database** (no server needed)
 
 ---
 
@@ -43,84 +21,75 @@ Welcome! This is your complete IT Infrastructure Monitoring Dashboard system. He
 
 **Choose your path:**
 
-### 🆕 "I just got this, what do I do first?"
+### 🆕 "I just cloned this, what do I do first?"
 
-1. ✅ Extract `IT-Dashboard-Complete.tar.gz`
-2. ✅ Read `PROJECT-SUMMARY.md` (in this folder)
-3. ✅ Read `UPLOAD-TO-GITHUB.md` (upload code)
-4. ✅ Read `QUICK-START.md` (run locally to test)
+1. ✅ Read [README.md](README.md) - Project overview
+2. ✅ Read [QUICK-START.md](QUICK-START.md) - Run locally
+3. ✅ Test the application
+4. ✅ Choose deployment method
 
-### 🧪 "I want to test it locally first"
+### 🧪 "I want to test it locally"
 
-1. ✅ Extract the archive
-2. ✅ Read `QUICK-START.md`
-3. ✅ Build and run (dotnet run)
-4. ✅ Access dashboard at http://localhost:5001
+1. ✅ Read [QUICK-START.md](QUICK-START.md)
+2. ✅ Run: `dotnet run --project OverviewDashboard/OverviewDashboard.csproj`
+3. ✅ Open: `http://localhost:5203`
+4. ✅ Explore Swagger: `http://localhost:5203/swagger`
 
-### 🚀 "I want to deploy to production (IIS)"
+### 🚀 "I want to deploy to production"
 
-1. ✅ Extract the archive
-2. ✅ Read `DEPLOYMENT-GUIDE.md`
-3. ✅ Publish the applications
-4. ✅ Setup IIS
-5. ✅ Install PowerShell agents
+**Option A - Docker (Recommended):**
+1. ✅ Read [DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md)
+2. ✅ Configure GitHub Secrets
+3. ✅ Push to main branch
+4. ✅ GitHub Actions deploys automatically
+
+**Option B - Windows Service:**
+1. ✅ Read [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md)
+2. ✅ Publish the application
+3. ✅ Run `Deploy-WindowsService.ps1`
+4. ✅ Configure firewall
 
 ### 📖 "I want to understand the code"
 
-1. ✅ Extract the archive
-2. ✅ Read `README.md` (inside DashboardSystem folder)
-3. ✅ Review code comments (all files documented)
-4. ✅ Check Swagger at http://localhost:5000/swagger
+1. ✅ Read [README.md](README.md) - Architecture overview
+2. ✅ Read [PROJECT-SUMMARY.md](PROJECT-SUMMARY.md) - Technology stack
+3. ✅ Explore the code structure
+4. ✅ Check Swagger at `/swagger`
 
 ### 🔧 "I need help with a specific task"
 
-1. ✅ Read `QUICK-START.md` → "Common Tasks" section
-2. ✅ Check troubleshooting sections in all docs
-3. ✅ Review code comments
+1. ✅ Check [QUICK-START.md](QUICK-START.md) - Common tasks
+2. ✅ Check troubleshooting sections
+3. ✅ Review Swagger documentation
 
 ---
 
-## 📂 Inside the Archive
-
-When you extract `IT-Dashboard-Complete.tar.gz`, you'll get:
+## 📂 Project Structure
 
 ```
-DashboardSystem/
-├── README.md                    ← Full project documentation
-├── .gitignore                   ← Git ignore file
+overview_dashboard/
+├── OverviewDashboard/              # Main application
+│   ├── Components/Pages/           # Blazor pages
+│   ├── Controllers/                # API controllers
+│   ├── Data/                       # EF Core DbContext
+│   ├── DTOs/                       # Data transfer objects
+│   ├── Models/                     # Entity models
+│   ├── wwwroot/css/                # Stylesheets
+│   ├── Program.cs                  # App entry point
+│   └── appsettings.json            # Configuration
 │
-├── DashboardAPI/                ← ASP.NET Core Web API
-│   ├── Controllers/
-│   ├── Models/
-│   ├── Data/
-│   ├── DTOs/
-│   ├── Program.cs               ← OLD STYLE (not minimal API)
-│   ├── Startup.cs
-│   ├── appsettings.json
-│   └── DashboardAPI.csproj
-│
-├── BlazorDashboard/             ← Blazor Server Dashboard
-│   ├── Pages/
-│   ├── Services/
-│   ├── Models/
-│   ├── wwwroot/
-│   ├── Program.cs
-│   ├── Startup.cs
-│   └── BlazorDashboard.csproj
-│
-├── PowerShellAgent/             ← Data collection scripts
-│   ├── DashboardMetrics.psm1
-│   ├── Install-MetricsAgent.ps1
-│   └── Example-SendMetrics.ps1
-│
-├── Database/
-│   └── 01_CreateDatabase.sql
-│
-├── Deployment/
-│   └── (IIS scripts)
+├── Database/                       # SQLite database
+├── .github/workflows/              # GitHub Actions
+├── Dockerfile                      # Docker config
+├── Deploy-WindowsService.ps1       # Windows installer
 │
 └── Documentation/
-    └── (Additional docs)
+    ├── README.md                   # Main docs
+    ├── DOCKER-DEPLOYMENT.md        # Docker guide
+    ├── DEPLOYMENT-GUIDE.md         # Deployment options
+    ├── QUICK-START.md              # Quick reference
+    ├── PROJECT-SUMMARY.md          # Project overview
+    └── START-HERE.md               # This file
 ```
 
 ---
@@ -131,114 +100,106 @@ DashboardSystem/
 
 #### 👨‍💼 **IT Manager / Decision Maker**
 Read in this order:
-1. `PROJECT-SUMMARY.md` → Overview of what you're getting
-2. `README.md` → Features and benefits
-3. `DEPLOYMENT-GUIDE.md` → Deployment effort estimate
+1. [PROJECT-SUMMARY.md](PROJECT-SUMMARY.md) - What you're getting
+2. [README.md](README.md) - Features and benefits
+3. [DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md) - Deployment effort
 
 #### 👨‍💻 **System Administrator (Deploying)**
 Read in this order:
-1. `QUICK-START.md` → Test locally first
-2. `DEPLOYMENT-GUIDE.md` → Step-by-step IIS deployment
-3. PowerShell agent help → Run: `Get-Help Send-ComponentMetric -Full`
+1. [QUICK-START.md](QUICK-START.md) - Test locally first
+2. [DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md) - Docker deployment
+3. [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md) - Windows Service option
 
 #### 🔧 **Support Person (Troubleshooting)**
 Read in this order:
-1. `QUICK-START.md` → "Troubleshooting" section
-2. `DEPLOYMENT-GUIDE.md` → "Common Issues" section
-3. Code comments → All functions documented
+1. [QUICK-START.md](QUICK-START.md) - Troubleshooting section
+2. [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md) - Common issues
+3. Swagger UI - `/swagger` for API testing
 
-#### 📊 **Power User (Customizing)**
+#### 📊 **Developer (Customizing)**
 Read in this order:
-1. `README.md` → Architecture overview
-2. `QUICK-START.md` → "Common Tasks" section
-3. Code files → Heavily commented
-4. Swagger UI → http://localhost:5000/swagger
+1. [README.md](README.md) - Architecture overview
+2. [QUICK-START.md](QUICK-START.md) - API endpoints
+3. Code files - Well-structured and organized
+4. Swagger UI - `/swagger` for API documentation
 
 ---
 
 ## ⏱️ Time Estimates
 
-### To Get Running Locally (Testing):
-- **Extract archive:** 1 minute
-- **Install .NET SDK:** 5 minutes (one-time)
-- **Build projects:** 2 minutes
-- **Run dashboard:** 1 minute
-- **Total:** ~10 minutes
+### To Get Running Locally:
+- **Clone repository:** 1 minute
+- **Install .NET 9.0 SDK:** 5 minutes (one-time)
+- **Run application:** 1 minute
+- **Total:** ~7 minutes
 
-### To Deploy to IIS (Production):
-- **Publish applications:** 5 minutes
-- **Setup IIS:** 10 minutes
+### To Deploy with Docker:
+- **Configure GitHub Secrets:** 5 minutes
+- **Push to GitHub:** 1 minute
+- **Automated deployment:** 5-10 minutes
+- **Total:** ~15 minutes
+
+### To Deploy as Windows Service:
+- **Publish application:** 5 minutes
+- **Run installer script:** 2 minutes
 - **Configure firewall:** 2 minutes
-- **Test deployment:** 5 minutes
-- **Total:** ~25 minutes
-
-### To Install Agents (Per Server):
-- **Copy files:** 1 minute
-- **Run installer:** 2 minutes
-- **Test agent:** 2 minutes
-- **Total:** ~5 minutes per server
+- **Total:** ~10 minutes
 
 ---
 
 ## 🎓 Learning Path
 
 ### Day 1: Understanding (30 minutes)
-1. Read `PROJECT-SUMMARY.md` (5 min)
-2. Read `README.md` (10 min)
-3. Review architecture diagram in README (5 min)
-4. Check code structure (10 min)
+1. Read [PROJECT-SUMMARY.md](PROJECT-SUMMARY.md) (10 min)
+2. Read [README.md](README.md) (10 min)
+3. Review project structure (10 min)
 
 ### Day 2: Local Testing (1 hour)
-1. Read `QUICK-START.md` (10 min)
-2. Extract and build (15 min)
-3. Run locally (5 min)
-4. Explore dashboard (15 min)
-5. Test PowerShell agent (15 min)
+1. Read [QUICK-START.md](QUICK-START.md) (10 min)
+2. Clone and run (10 min)
+3. Explore dashboard (20 min)
+4. Test API via Swagger (20 min)
 
 ### Day 3: Customization (2 hours)
-1. Add your systems to database (30 min)
-2. Modify PowerShell agent for your metrics (1 hour)
-3. Test end-to-end (30 min)
+1. Add your own data via API (30 min)
+2. Modify styling (30 min)
+3. Test end-to-end (1 hour)
 
-### Day 4: Production Deployment (3 hours)
-1. Read `DEPLOYMENT-GUIDE.md` (30 min)
-2. Publish applications (30 min)
-3. Setup IIS (1 hour)
-4. Install agents (30 min)
-5. Test and verify (30 min)
+### Day 4: Production Deployment (2 hours)
+1. Read deployment guide (30 min)
+2. Configure deployment (30 min)
+3. Deploy application (30 min)
+4. Test and verify (30 min)
 
-### Total: ~6.5 hours to fully deployed system
+### Total: ~5.5 hours to fully deployed system
 
 ---
 
 ## ✅ Checklist for Success
 
 ### Before You Start:
-- [ ] .NET 8.0 SDK installed
-- [ ] Visual Studio or VS Code (optional)
-- [ ] PowerShell 5.1 or later
-- [ ] Git installed (for GitHub)
-- [ ] Admin access to servers
+- [ ] .NET 9.0 SDK installed
+- [ ] Git installed
+- [ ] Admin access to deployment server
+- [ ] Docker installed (for Docker deployment)
 
-### After Extracting:
-- [ ] Code compiles successfully
-- [ ] Database creates without errors
+### After Cloning:
+- [ ] Application runs successfully
+- [ ] Database creates automatically
 - [ ] Dashboard shows sample data
-- [ ] API responds to requests
+- [ ] API responds at `/swagger`
 
 ### Before Production:
 - [ ] Tested locally
-- [ ] Customized for your environment
-- [ ] IIS prerequisites met
+- [ ] Chosen deployment method
+- [ ] Configured secrets/settings
 - [ ] Firewall rules planned
-- [ ] Backup strategy in place
 
 ### After Deployment:
 - [ ] Dashboard accessible from network
 - [ ] API endpoints responding
-- [ ] PowerShell agents sending data
 - [ ] Real-time updates working
-- [ ] Logs being generated
+- [ ] Data persisting correctly
 
 ---
 
@@ -246,43 +207,43 @@ Read in this order:
 
 ### Problem-Solving Order:
 
-1. **Check the troubleshooting sections:**
-   - `QUICK-START.md` → Troubleshooting
-   - `DEPLOYMENT-GUIDE.md` → Common Issues
+1. **Check troubleshooting sections:**
+   - [QUICK-START.md](QUICK-START.md) - Troubleshooting
+   - [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md) - Common issues
+   - [DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md) - Docker issues
 
 2. **Review error messages:**
    - Browser console (F12)
-   - API logs
-   - PowerShell error output
+   - Application logs
+   - Docker logs (if using Docker)
 
 3. **Verify basics:**
-   - Is API running?
+   - Is application running?
    - Is database accessible?
    - Are URLs correct?
    - Is firewall allowing traffic?
 
 4. **Check documentation:**
    - README.md
-   - Code comments
-   - Swagger UI
+   - Swagger UI at `/swagger`
 
 ### Useful Commands:
 
 ```powershell
-# Check if API is running
-Test-NetConnection localhost -Port 5000
-
-# Check if dashboard is running
-Test-NetConnection localhost -Port 5001
-
-# View running .NET processes
-Get-Process dotnet
-
-# Check firewall rules
-Get-NetFirewallRule | Where-Object {$_.DisplayName -like "*Dashboard*"}
+# Run the application
+dotnet run --project OverviewDashboard/OverviewDashboard.csproj
 
 # Test API endpoint
-Invoke-RestMethod -Uri "http://localhost:5000/api/dashboard/systems"
+Invoke-RestMethod -Uri "http://localhost:5203/api/components"
+
+# View running processes
+Get-Process dotnet
+
+# Check port availability
+Test-NetConnection localhost -Port 5203
+
+# View Docker logs (if using Docker)
+docker logs overview-dashboard
 ```
 
 ---
@@ -290,19 +251,17 @@ Invoke-RestMethod -Uri "http://localhost:5000/api/dashboard/systems"
 ## 📞 Support Resources
 
 ### Included Documentation:
-- ✅ PROJECT-SUMMARY.md (this file)
-- ✅ UPLOAD-TO-GITHUB.md
-- ✅ QUICK-START.md
-- ✅ DEPLOYMENT-GUIDE.md
-- ✅ README.md (in archive)
-- ✅ Code comments (every function)
+- ✅ [README.md](README.md) - Main documentation
+- ✅ [DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md) - Docker guide
+- ✅ [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md) - Deployment options
+- ✅ [QUICK-START.md](QUICK-START.md) - Quick reference
+- ✅ [PROJECT-SUMMARY.md](PROJECT-SUMMARY.md) - Project overview
 
 ### External Resources:
 - 🔗 Blazor Docs: https://docs.microsoft.com/aspnet/core/blazor
 - 🔗 EF Core Docs: https://docs.microsoft.com/ef/core
 - 🔗 SignalR Docs: https://docs.microsoft.com/aspnet/core/signalr
-- 🔗 IIS Deployment: https://docs.microsoft.com/aspnet/core/host-and-deploy/iis
-- 🔗 PowerShell Help: https://docs.microsoft.com/powershell
+- 🔗 Docker Docs: https://docs.docker.com
 
 ---
 
@@ -312,27 +271,27 @@ Invoke-RestMethod -Uri "http://localhost:5000/api/dashboard/systems"
 
 | Service | URL | Purpose |
 |---------|-----|---------|
-| Dashboard | http://server:5001 | Main monitoring dashboard |
-| API | http://server:5000 | REST API |
-| Swagger | http://server:5000/swagger | API documentation |
+| Dashboard | http://server:5203 | Main monitoring dashboard |
+| API | http://server:5203/api/* | REST API endpoints |
+| Swagger | http://server:5203/swagger | API documentation |
 
 ### Important Files:
 
 | File | Purpose | Location |
 |------|---------|----------|
-| dashboard.db | SQLite database | C:\inetpub\Shared\ |
-| appsettings.json | API config | C:\inetpub\DashboardAPI\ |
-| appsettings.json | Dashboard config | C:\inetpub\BlazorDashboard\ |
+| dashboard.db | SQLite database | Database/ or OverviewDashboard/Database/ |
+| appsettings.json | Configuration | OverviewDashboard/ |
+| Dockerfile | Docker config | Root directory |
+| deploy-to-gcp.yml | GitHub Actions | .github/workflows/ |
 
 ### Important Commands:
 
 | Task | Command |
 |------|---------|
-| Build API | `dotnet build` |
-| Run API | `dotnet run` |
-| Publish API | `dotnet publish -c Release` |
-| Update DB | `dotnet ef database update` |
-| Test agent | `.\Example-SendMetrics.ps1` |
+| Run locally | `dotnet run --project OverviewDashboard/OverviewDashboard.csproj` |
+| Publish | `dotnet publish -c Release -o ./Publish` |
+| Build Docker | `docker build -t overview-dashboard .` |
+| View logs | `docker logs overview-dashboard` |
 
 ---
 
@@ -340,34 +299,28 @@ Invoke-RestMethod -Uri "http://localhost:5000/api/dashboard/systems"
 
 ### Your Next Steps:
 
-1. **Extract** `IT-Dashboard-Complete.tar.gz`
-2. **Read** `PROJECT-SUMMARY.md` (you're here!)
-3. **Upload** to GitHub (see UPLOAD-TO-GITHUB.md)
-4. **Test** locally (see QUICK-START.md)
-5. **Deploy** to production (see DEPLOYMENT-GUIDE.md)
+1. **Read** [README.md](README.md) - Understand the project
+2. **Test** locally - See [QUICK-START.md](QUICK-START.md)
+3. **Deploy** - Choose Docker or Windows Service
+4. **Customize** - Add your data and styling
 
 ---
 
-## 📊 What You Built
+## 📊 What You Have
 
 A complete IT infrastructure monitoring system with:
 - ✅ Real-time dashboard
 - ✅ RESTful API
 - ✅ SQLite database
-- ✅ PowerShell agents
-- ✅ IIS deployment ready
-- ✅ Air-gap compatible
-- ✅ No JavaScript required
-- ✅ Full documentation
+- ✅ Docker deployment
+- ✅ Windows Service support
+- ✅ Swagger documentation
+- ✅ Sample data included
 
-**Built with: Blazor Server + ASP.NET Core + EF Core + PowerShell**
-
-**Total Development Time: ~80 minutes**
-**Total Token Usage: ~64,000 tokens**
-**Files Created: 26 source files + 5 documentation files**
+**Built with: .NET 9.0 + Blazor Server + EF Core + SQLite**
 
 ---
 
 **Happy Monitoring!** 🚀
 
-_Everything you need is in this package. No external dependencies. No developers required._
+_Everything you need is in this repository. Modern technology. Clear documentation._

@@ -1,285 +1,355 @@
-# How to Upload Your Code to GitHub
+# How to Work with GitHub
 
-I tried to push directly to your GitHub repository, but network restrictions prevented it. Here's how to upload it manually from your machine.
+This guide explains how to use GitHub with the Overview Dashboard project.
 
-## 📦 What You Have
+## 📦 Current Repository
 
-- **IT-Dashboard-Complete.tar.gz** - Complete project archive
-- The extracted folder will be called `DashboardSystem`
+**Repository:** https://github.com/itamartz/overview_dashboard
+
+The repository contains:
+- Unified OverviewDashboard application (.NET 9.0)
+- Docker deployment configuration
+- GitHub Actions workflow for automated deployment
+- Complete documentation
 
 ---
 
-## Option 1: Using Git Command Line (Recommended)
+## 🚀 Cloning the Repository
 
-### Step 1: Extract the Archive
+### First Time Setup
 
-**On Windows:**
 ```powershell
-# Using Windows built-in tar (Windows 10+)
-tar -xzf IT-Dashboard-Complete.tar.gz
+# Clone the repository
+git clone https://github.com/itamartz/overview_dashboard.git
+cd overview_dashboard
 
-# Or use 7-Zip if you don't have tar
-# Right-click → 7-Zip → Extract Here
+# Run the application
+dotnet run --project OverviewDashboard/OverviewDashboard.csproj
 ```
 
-### Step 2: Navigate to the Folder
+---
+
+## 📤 Pushing Changes
+
+### Standard Workflow
 
 ```powershell
-cd DashboardSystem
-```
-
-### Step 3: Verify Git is Initialized
-
-```powershell
+# Check status
 git status
-```
 
-You should see: `On branch main`
+# Add changes
+git add .
 
-### Step 4: Push to GitHub
-
-```powershell
-# Add the remote (if not already added)
-git remote add origin https://github.com/itamartz/overview_dashboard.git
-
-# Or if it already exists, update it:
-git remote set-url origin https://github.com/itamartz/overview_dashboard.git
+# Commit with message
+git commit -m "Your descriptive message"
 
 # Push to GitHub
-git push -u origin main
+git push origin main
 ```
 
-### Step 5: Enter Your Credentials
+### Automated Deployment
 
-When prompted:
+When you push to the `main` branch, GitHub Actions automatically:
+1. Builds a Docker image
+2. Deploys to your GCP instance (if configured)
+3. Restarts the container with new code
+
+---
+
+## 🔑 Authentication
+
+### Using Personal Access Token
+
+When Git prompts for credentials:
 - **Username:** `itamartz`
-- **Password:** Your Personal Access Token `ghp_1tn`
+- **Password:** Your Personal Access Token (starts with `ghp_`)
 
-✅ **Done!** Your code is now on GitHub at:
-https://github.com/itamartz/overview_dashboard
+### Creating a New Token
 
----
-
-## Option 2: Using GitHub Desktop (Easy GUI Method)
-
-### Step 1: Install GitHub Desktop
-
-Download from: https://desktop.github.com
-
-### Step 2: Sign In
-
-- Open GitHub Desktop
-- File → Options → Accounts
-- Sign in with your GitHub account
-
-### Step 3: Add the Repository
-
-1. File → Add Local Repository
-2. Browse to the extracted `DashboardSystem` folder
-3. Click "Add Repository"
-
-### Step 4: Publish to GitHub
-
-1. Click "Publish repository" button (top toolbar)
-2. Repository name: `overview_dashboard`
-3. Description: "IT Infrastructure Monitoring Dashboard"
-4. ✅ Uncheck "Keep this code private" (or keep it checked if you want private repo)
-5. Click "Publish repository"
-
-✅ **Done!** View it at: https://github.com/itamartz/overview_dashboard
+1. Go to: https://github.com/settings/tokens
+2. Click "Generate new token" → "Generate new token (classic)"
+3. Select scopes:
+   - ✅ `repo` (full control of private repositories)
+   - ✅ `workflow` (update GitHub Actions workflows)
+4. Click "Generate token"
+5. **Save the token** - you won't see it again!
 
 ---
 
-## Option 3: Manual Web Upload (Last Resort)
+## 🌿 Branching Strategy
 
-If Git isn't working, upload files manually via GitHub website:
-
-### Step 1: Create Repository (if it doesn't exist)
-
-1. Go to https://github.com/new
-2. Repository name: `overview_dashboard`
-3. Click "Create repository"
-
-### Step 2: Upload Files
-
-1. Go to: https://github.com/itamartz/overview_dashboard
-2. Click "uploading an existing file" link
-3. Drag and drop ALL folders from `DashboardSystem` folder:
-   - DashboardAPI/
-   - BlazorDashboard/
-   - PowerShellAgent/
-   - Database/
-   - Deployment/
-   - Documentation/
-   - README.md
-   - .gitignore
-
-4. Commit message: "Initial commit: IT Infrastructure Dashboard"
-5. Click "Commit changes"
-
-✅ **Done!**
-
----
-
-## ⚠️ Important Notes
-
-### Your Personal Access Token
-
-I can see your token in the conversation:
-```
-ghp_1tn
-```
-
-**Security Recommendations:**
-1. ✅ This token will work for uploads
-2. ⚠️ Consider rotating it after this project (GitHub Settings → Tokens)
-3. ⚠️ Don't share this token publicly
-4. ✅ Tokens in this conversation are secure (only you can see them)
-
-### If Push Fails with Authentication Error
-
-**Error:** `remote: Invalid username or password`
-
-**Solution:** Use token as password, not your GitHub password
+### Create a Feature Branch
 
 ```powershell
-Username: itamartz
-Password: ghp_1t ← Use this, not your GitHub password
+# Create and switch to new branch
+git checkout -b feature/your-feature-name
+
+# Make changes, then commit
+git add .
+git commit -m "Add new feature"
+
+# Push branch to GitHub
+git push origin feature/your-feature-name
 ```
 
-### If Repository Already Has Content
-
-**Error:** `! [rejected] main -> main (fetch first)`
-
-**Solution:** Force push (if you want to overwrite)
+### Merge to Main
 
 ```powershell
-git push -u origin main --force
+# Switch to main
+git checkout main
+
+# Pull latest changes
+git pull origin main
+
+# Merge your feature
+git merge feature/your-feature-name
+
+# Push to main (triggers deployment)
+git push origin main
 ```
 
-⚠️ **Warning:** This will overwrite any existing content in the repository!
+---
+
+## 🐳 Docker Deployment via GitHub Actions
+
+### Setup (One-Time)
+
+Configure GitHub Secrets in your repository:
+
+1. Go to: https://github.com/itamartz/overview_dashboard/settings/secrets/actions
+2. Add these secrets:
+   - `GCP_HOST` - Your server IP address
+   - `GCP_USERNAME` - SSH username
+   - `GCP_SSH_KEY` - Your private SSH key
+
+### Trigger Deployment
+
+```powershell
+# Any push to main triggers deployment
+git push origin main
+```
+
+### Monitor Deployment
+
+1. Go to: https://github.com/itamartz/overview_dashboard/actions
+2. Click on the latest workflow run
+3. Watch the progress of each step
 
 ---
 
-## ✅ Verification
+## 🔧 Common Git Tasks
 
-After uploading, verify by visiting:
+### View Commit History
 
-**Repository URL:**
-https://github.com/itamartz/overview_dashboard
+```powershell
+git log --oneline --graph --all
+```
 
-**You should see:**
-- README.md (with nice documentation)
-- DashboardAPI folder
-- BlazorDashboard folder
-- PowerShellAgent folder
-- Database folder
-- All other files
+### Undo Last Commit (Keep Changes)
 
----
+```powershell
+git reset --soft HEAD~1
+```
 
-## 🎯 Next Steps After Upload
+### Discard Local Changes
 
-### On Your Development Machine:
+```powershell
+# Discard changes in specific file
+git checkout -- filename
 
-1. **Clone from GitHub:**
-   ```powershell
-   git clone https://github.com/itamartz/overview_dashboard.git
-   cd overview_dashboard
-   ```
+# Discard all changes
+git reset --hard HEAD
+```
 
-2. **Build and test:**
-   ```powershell
-   cd DashboardAPI
-   dotnet build
-   dotnet run
-   ```
+### Pull Latest Changes
 
-3. **Publish for deployment:**
-   ```powershell
-   dotnet publish -c Release -r win-x64 --self-contained true -o ../Publish/API
-   ```
+```powershell
+git pull origin main
+```
 
-### On Your Air-Gapped Server:
+### View Differences
 
-1. **Transfer files** via USB/approved method
-2. **Deploy to IIS** (see DEPLOYMENT-GUIDE.md)
-3. **Install agents** on monitored servers
-4. **Access dashboard** at http://your-server:5001
+```powershell
+# See what changed
+git diff
+
+# See staged changes
+git diff --staged
+```
 
 ---
 
 ## 🆘 Troubleshooting
 
-### "Git not found"
-
-**Install Git:**
-- Download from: https://git-scm.com/download/win
-- Install with default options
-- Restart PowerShell
-
 ### "Permission denied"
 
-**Check token permissions:**
-1. Go to: https://github.com/settings/tokens
-2. Find your token
-3. Verify **repo** scope is checked
-4. Regenerate if needed
+**Problem:** Authentication failed
+
+**Solution:**
+```powershell
+# Make sure you're using token, not password
+# Username: itamartz
+# Password: ghp_your_token_here
+```
+
+### "Rejected - fetch first"
+
+**Problem:** Remote has changes you don't have locally
+
+**Solution:**
+```powershell
+# Pull and merge
+git pull origin main
+
+# Or pull with rebase
+git pull --rebase origin main
+
+# Then push
+git push origin main
+```
 
 ### "Large files rejected"
 
-**Solution:** Use Git LFS or split into smaller commits
+**Problem:** File too large for GitHub (>100MB)
 
+**Solution:**
 ```powershell
-# If you have large binary files
-git lfs install
-git lfs track "*.dll"
-git add .gitattributes
-git commit -m "Add LFS tracking"
-git push
+# Add to .gitignore
+echo "large-file.bin" >> .gitignore
+git add .gitignore
+git commit -m "Ignore large files"
+```
+
+### "Merge conflicts"
+
+**Problem:** Same file changed in different ways
+
+**Solution:**
+```powershell
+# Edit conflicted files manually
+# Look for <<<<<<< HEAD markers
+# Choose which changes to keep
+
+# After resolving
+git add .
+git commit -m "Resolve merge conflicts"
 ```
 
 ---
 
-## 📞 Need Help?
+## 📋 .gitignore
 
-### Check these in order:
+The repository includes a `.gitignore` file that excludes:
+- `bin/` and `obj/` directories
+- `*.db` database files
+- `*.user` files
+- IDE-specific files
 
-1. ✅ **Git Status:** `git status`
-2. ✅ **Remote URL:** `git remote -v`
-3. ✅ **Branch:** `git branch`
-4. ✅ **Credentials:** Make sure using token, not password
-
-### Common Commands:
+### Add More Exclusions
 
 ```powershell
+# Edit .gitignore
+echo "my-secret-file.txt" >> .gitignore
+git add .gitignore
+git commit -m "Update gitignore"
+```
+
+---
+
+## 🎯 Best Practices
+
+### Commit Messages
+
+Use clear, descriptive messages:
+
+```powershell
+# Good
+git commit -m "Add Docker deployment workflow"
+git commit -m "Fix database path for Windows Service"
+git commit -m "Update README with deployment instructions"
+
+# Bad
+git commit -m "fix"
+git commit -m "changes"
+git commit -m "update"
+```
+
+### Commit Frequency
+
+- Commit often with small, logical changes
+- Each commit should represent one complete change
+- Don't commit broken code to main branch
+
+### Before Pushing
+
+```powershell
+# Always check what you're pushing
+git status
+git diff
+
+# Test locally
+dotnet build
+dotnet run --project OverviewDashboard/OverviewDashboard.csproj
+```
+
+---
+
+## 🔄 Syncing with GitHub
+
+### Daily Workflow
+
+```powershell
+# Start of day - get latest
+git pull origin main
+
+# Work on changes
+# ... make changes ...
+
+# End of day - push changes
+git add .
+git commit -m "Describe your changes"
+git push origin main
+```
+
+---
+
+## 📞 Getting Help
+
+### Useful Commands
+
+```powershell
+# See remote URL
+git remote -v
+
+# See current branch
+git branch
+
 # See what will be pushed
 git log origin/main..main
 
-# See changed files
+# See file changes
 git status
-
-# See remote configuration
-git remote -v
-
-# Reset if needed (CAREFUL!)
-git reset --hard HEAD
 ```
+
+### Resources
+
+- Git Documentation: https://git-scm.com/doc
+- GitHub Guides: https://guides.github.com
+- Git Cheat Sheet: https://education.github.com/git-cheat-sheet-education.pdf
 
 ---
 
-## 🎉 You're Done!
+## 🎉 You're All Set!
 
-Once uploaded, you can:
-- ✅ Access code from anywhere
-- ✅ Clone to multiple machines
-- ✅ Track changes with version control
-- ✅ Share with team members
-- ✅ Create branches for new features
+Now you can:
+- ✅ Clone the repository
+- ✅ Make changes locally
+- ✅ Push to GitHub
+- ✅ Trigger automated deployments
+- ✅ Collaborate with team members
 
-**Your IT Dashboard code is now safely on GitHub!** 🚀
+**Your code is version-controlled and automatically deployed!** 🚀
 
 ---
 
 **Repository:** https://github.com/itamartz/overview_dashboard
-**Token (keep private):** ghp_1tn

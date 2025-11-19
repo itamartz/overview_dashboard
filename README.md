@@ -1,58 +1,59 @@
 # IT Infrastructure Overview Dashboard
 
-A real-time monitoring dashboard for IT infrastructure built with **Blazor Server**, **ASP.NET Core Web API**, and **Entity Framework Core with SQLite**. Designed for air-gapped environments with no developer required for maintenance.
+A real-time monitoring dashboard for IT infrastructure built with **Blazor Server**, **ASP.NET Core Web API**, and **Entity Framework Core with SQLite**. Features Docker deployment via GitHub Actions and Windows Service support.
 
-<img width="1890" height="905" alt="image" src="https://github.com/user-attachments/assets/e8a9191c-a037-4272-9b7b-c6ec8831227d" />
-
-
+![Dashboard Screenshot](https://github.com/user-attachments/assets/e8a9191c-a037-4272-9b7b-c6ec8831227d)
 
 ## 🎯 Features
 
 - ✅ **Real-time Updates** - SignalR-based live dashboard without page refresh
-- ✅ **Hierarchical Navigation** - Systems → Projects → Components
+- ✅ **Hierarchical Navigation** - Systems → Projects → Components  
 - ✅ **Status Monitoring** - OK, Warning, Error, Info severity levels
 - ✅ **SQLite Database** - No external database server required
-- ✅ **Air-Gap Ready** - Self-contained deployment, no internet needed
-- ✅ **PowerShell Agents** - Automated data collection from Windows servers
-- ✅ **IIS Compatible** - Easy deployment on Windows Server
+- ✅ **Docker Deployment** - GitHub Actions workflow for GCP deployment
+- ✅ **Windows Service** - Can run as a Windows Service
+- ✅ **REST API** - Built-in API with Swagger documentation
 - ✅ **Zero JavaScript** - Pure C# Blazor application
 
 ## 📋 Prerequisites
 
-### On Your Development Machine:
-- .NET 8.0 SDK
+### Development:
+- .NET 9.0 SDK
 - Visual Studio 2022 or VS Code (optional)
 - Git (for cloning)
 
-### On Production Server (IIS):
+### Deployment Options:
+
+**Option A - Docker (Recommended):**
+- Docker installed on target server
+- GitHub repository with Actions enabled
+- GCP instance (or any server with Docker)
+
+**Option B - Windows Service:**
 - Windows Server 2012 R2 or newer
-- IIS with ASP.NET Core Hosting Bundle
-- .NET 8.0 Runtime (or use self-contained deployment)
+- .NET 9.0 Runtime
 
 ## 🏗️ Project Structure
 
 ```
-DashboardSystem/
-├── DashboardAPI/              # ASP.NET Core Web API (old Program.cs style)
-│   ├── Controllers/           # API controllers for metrics and dashboard data
-│   ├── Data/                  # EF Core DbContext with SQLite
-│   ├── Models/                # Entity models (System, Project, Component, Metric)
-│   ├── DTOs/                  # Data Transfer Objects
-│   └── Services/              # Background services for data updates
+overview_dashboard/
+├── OverviewDashboard/              # Main Blazor Server Application
+│   ├── Components/                 # Blazor components and pages
+│   │   └── Pages/                  # Razor pages
+│   ├── Controllers/                # API controllers
+│   ├── Data/                       # EF Core DbContext
+│   ├── DTOs/                       # Data Transfer Objects
+│   ├── Models/                     # Entity models
+│   ├── wwwroot/                    # Static files (CSS, JS)
+│   ├── Program.cs                  # Application entry point
+│   └── appsettings.json            # Configuration
 │
-├── BlazorDashboard/           # Blazor Server Application
-│   ├── Pages/                 # Razor pages/components
-│   ├── Services/              # Dashboard services and SignalR hubs
-│   └── Models/                # View models
-│
-├── PowerShellAgent/           # Data collection agents
-│   ├── Install-MetricsAgent.ps1     # Agent installer script
-│   └── Example-SendMetrics.ps1      # Example usage
-│
-├── Database/                  # SQL scripts (reference only - using EF migrations)
-├── Deployment/                # IIS deployment scripts
-└── Documentation/             # Additional documentation
-
+├── Database/                       # SQLite database location
+├── PowerShellAgent/                # Data collection agents (optional)
+├── .github/workflows/              # GitHub Actions for deployment
+├── Dockerfile                      # Docker container configuration
+├── .dockerignore                   # Docker build exclusions
+└── DOCKER-DEPLOYMENT.md            # Docker deployment guide
 ```
 
 ## 🚀 Quick Start
@@ -64,160 +65,71 @@ git clone https://github.com/itamartz/overview_dashboard.git
 cd overview_dashboard
 ```
 
-### 2. Build the Projects
+### 2. Run Locally (Development)
 
 ```powershell
-# Build API
-cd DashboardAPI
-dotnet build
-
-# Build Blazor Dashboard
-cd ../BlazorDashboard
-dotnet build
+# The database will be created automatically
+dotnet run --project OverviewDashboard/OverviewDashboard.csproj
 ```
 
-### 3. Initialize the Database
+Navigate to the URL shown in the console (typically `http://localhost:5203`)
+
+### 3. Access the Dashboard
+
+- **Dashboard:** `http://localhost:5203`
+- **API Endpoints:** `http://localhost:5203/api/*`
+- **Swagger UI:** `http://localhost:5203/swagger`
+
+## 📦 Deployment Options
+
+### Option A: Docker Deployment (Recommended)
+
+See [DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md) for complete instructions.
+
+**Quick Summary:**
+1. Configure GitHub Secrets (GCP_HOST, GCP_USERNAME, GCP_SSH_KEY)
+2. Push to main branch
+3. GitHub Actions automatically builds and deploys to your server
+
+### Option B: Windows Service
 
 ```powershell
-cd DashboardAPI
-dotnet ef database update
+# Publish the application
+dotnet publish OverviewDashboard/OverviewDashboard.csproj -c Release -o ./publish
+
+# Install as Windows Service (requires admin)
+sc create OverviewDashboard binPath="C:\path\to\publish\OverviewDashboard.exe"
+sc start OverviewDashboard
 ```
 
-This creates `dashboard.db` SQLite file with sample data.
-
-### 4. Run Locally (Development)
-
-**Terminal 1 - API:**
-```powershell
-cd DashboardAPI
-dotnet run
-# API runs on: https://localhost:7001
-```
-
-**Terminal 2 - Blazor Dashboard:**
-```powershell
-cd BlazorDashboard
-dotnet run
-# Dashboard runs on: https://localhost:7002
-```
-
-Navigate to `https://localhost:7002` to see the dashboard.
-
-## 📦 Deployment to IIS (Air-Gapped Environment)
-
-### Step 1: Publish the Applications
-
-```powershell
-# Publish API (self-contained for air-gap)
-cd DashboardAPI
-dotnet publish -c Release -r win-x64 --self-contained true -o ../Publish/API
-
-# Publish Blazor Dashboard (self-contained)
-cd ../BlazorDashboard
-dotnet publish -c Release -r win-x64 --self-contained true -o ../Publish/Dashboard
-```
-
-### Step 2: Copy to Production Server
-
-Copy the `Publish` folder to your production server via USB or approved transfer method.
-
-### Step 3: Setup IIS
-
-Run the PowerShell deployment script on the server:
-
-```powershell
-# Run as Administrator
-cd Deployment
-.\Deploy-ToIIS.ps1
-```
-
-Or manually configure:
-
-1. **Install ASP.NET Core Hosting Bundle** (if not using self-contained)
-2. **Create Application Pools:**
-   - `DashboardAPI_Pool` (.NET CLR: No Managed Code)
-   - `BlazorDashboard_Pool` (.NET CLR: No Managed Code)
-
-3. **Create IIS Sites:**
-   - API: Port 5000, Path: `C:\inetpub\DashboardAPI`
-   - Dashboard: Port 5001, Path: `C:\inetpub\BlazorDashboard`
-
-4. **Enable WebSockets** (required for SignalR)
-
-### Step 4: Configure Database Path
-
-Edit `appsettings.json` in both applications:
-
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Data Source=C:\\inetpub\\Dashboard\\dashboard.db"
-  }
-}
-```
-
-### Step 5: Copy Database
-
-```powershell
-# Copy the database file to shared location
-copy dashboard.db C:\inetpub\Dashboard\
-```
-
-## 🔧 PowerShell Agent Setup
-
-The PowerShell agent collects metrics from Windows servers and sends them to the API.
-
-### Install on Monitored Servers:
-
-```powershell
-# Copy agent to server
-copy PowerShellAgent C:\Tools\DashboardAgent
-
-# Install as scheduled task (runs every 5 minutes)
-cd C:\Tools\DashboardAgent
-.\Install-MetricsAgent.ps1 -ApiUrl "http://dashboard-server:5000" -InstallPath "C:\Tools\DashboardAgent"
-```
-
-### Manual Test:
-
-```powershell
-.\Example-SendMetrics.ps1 -ApiUrl "http://dashboard-server:5000/api/metrics" -ComponentId "COMP001"
-```
+See `Deploy-WindowsService.ps1` for automated installation.
 
 ## ⚙️ Configuration
 
-### API Configuration (`DashboardAPI/appsettings.json`)
+### Database Configuration
+
+Edit `OverviewDashboard/appsettings.json`:
 
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Data Source=dashboard.db"
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*",
-  "Cors": {
-    "AllowedOrigins": [
-      "https://localhost:7002",
-      "http://your-dashboard-server"
-    ]
+    "DefaultConnection": "Data Source=Database/dashboard.db"
   }
 }
 ```
 
-### Blazor Configuration (`BlazorDashboard/appsettings.json`)
+The database is created automatically on first run with sample data.
 
-```json
-{
-  "ApiSettings": {
-    "BaseUrl": "https://localhost:7001"  // Change to your API URL
-  },
-  "RefreshInterval": 30000  // Milliseconds (30 seconds)
-}
+### Environment Variables
+
+You can override settings using environment variables:
+
+```bash
+# Database path
+ConnectionStrings__DefaultConnection="Data Source=/custom/path/dashboard.db"
+
+# Logging level
+Logging__LogLevel__Default="Debug"
 ```
 
 ## 📊 Database Schema
@@ -225,86 +137,91 @@ cd C:\Tools\DashboardAgent
 The system uses a hierarchical structure:
 
 ```
-Systems (e.g., "Production Environment")
-  └── Projects (e.g., "Web Servers")
-       └── Components (e.g., "WEB-SRV-01")
-            └── ComponentMetrics (CPU, Memory, Disk status)
+Systems (e.g., "ActiveDirectory", "vCenter", "WSUS")
+  └── Projects (e.g., "UserAudit", "StorageHealth")
+       └── Components (individual monitored items)
+            └── Payload (JSON data with metrics)
 ```
 
 ### Entity Models:
 
-- **SystemEntity** - Top-level systems
-- **Project** - Groups of related components
-- **Component** - Individual monitored items
-- **ComponentMetric** - Time-series metrics with severity levels
+- **Component** - Monitored items with JSON payload
+- **SystemName** - Top-level system identifier
+- **ProjectName** - Project/category identifier
+- **Payload** - Flexible JSON data structure
 
 ## 🔄 How It Works
 
-1. **PowerShell agents** on each server collect metrics every 1-5 minutes
-2. Agents POST data to **DashboardAPI** `/api/metrics` endpoint
-3. API saves metrics to **SQLite database** via Entity Framework
-4. **Background service** in Blazor app polls database for changes
-5. **SignalR** pushes updates to all connected browser clients
-6. Dashboard updates in **real-time** without page refresh
-
-## 🛠️ Customization
-
-### Add New Component Types:
-
-1. Update `Component.ComponentType` enum (if using enums)
-2. Create PowerShell collection script
-3. Add UI display logic in Blazor pages
-
-### Add New Metrics:
-
-1. Modify `ComponentMetric` model if needed
-2. Update PowerShell agent to collect new data
-3. Add display in dashboard
-
-### Change Refresh Intervals:
-
-- **PowerShell Agent:** Edit scheduled task interval
-- **Dashboard Updates:** Modify `RefreshInterval` in appsettings.json
-- **Background Service:** Edit `BackgroundMetricsService.cs`
+1. **Data Collection** - Components send data via API POST to `/api/components`
+2. **Storage** - Data saved to SQLite database via Entity Framework
+3. **Real-time Updates** - SignalR pushes changes to connected clients
+4. **Dashboard Display** - Blazor components render data with color-coded status
 
 ## 📝 API Endpoints
 
-### Dashboard Data:
-- `GET /api/dashboard` - Get complete dashboard hierarchy
-- `GET /api/dashboard/systems` - Get all systems
-- `GET /api/dashboard/systems/{id}/projects` - Get projects for system
-- `GET /api/dashboard/projects/{id}/components` - Get components for project
+### Components:
+- `GET /api/components` - Get all components
+- `GET /api/components/{id}` - Get specific component
+- `POST /api/components` - Create/update component
+- `DELETE /api/components/{id}` - Delete component
 
-### Metrics Collection:
-- `POST /api/metrics` - Submit new metrics from agents
-- `GET /api/metrics/latest/{componentId}` - Get latest metric for component
+### Systems:
+- `GET /api/components/systems` - Get all unique systems
+- `GET /api/components/system/{systemName}` - Get components by system
 
 ### Swagger UI:
-- Navigate to `https://your-api-server:5000/swagger` for interactive API documentation
+- Navigate to `/swagger` for interactive API documentation
+
+## 🛠️ Customization
+
+### Add New Component:
+
+```powershell
+# Via API
+Invoke-RestMethod -Uri "http://localhost:5203/api/components" `
+    -Method POST `
+    -ContentType "application/json" `
+    -Body '{
+        "systemName": "MySystem",
+        "projectName": "MyProject",
+        "payload": "{\"status\": \"ok\", \"value\": 100}"
+    }'
+```
+
+### Modify Dashboard Styling:
+
+Edit `OverviewDashboard/wwwroot/css/dashboard.css`
+
+### Change Refresh Intervals:
+
+Update SignalR configuration in `Program.cs`
 
 ## 🐛 Troubleshooting
 
-### Dashboard Not Updating:
-1. Check SignalR WebSocket connection in browser console
-2. Verify IIS WebSocket is enabled
-3. Check firewall allows WebSocket connections
+### Database Issues:
+```powershell
+# Delete and recreate database
+Remove-Item Database/dashboard.db
+dotnet run --project OverviewDashboard/OverviewDashboard.csproj
+```
 
-### Agent Can't Send Data:
-1. Test API endpoint: `curl http://api-server:5000/api/metrics -v`
-2. Check network connectivity from agent server
-3. Verify API is running in IIS
+### Port Already in Use:
+```powershell
+# Run on different port
+dotnet run --project OverviewDashboard/OverviewDashboard.csproj --urls "http://localhost:5000"
+```
 
-### Database Locked:
-1. Ensure only one application instance accesses SQLite
-2. Check file permissions on `dashboard.db`
-3. Consider switching to SQL Server for multi-instance
+### Docker Build Fails:
+- Check Dockerfile publish settings
+- Ensure .dockerignore is present
+- Review GitHub Actions logs
 
 ## 📚 Additional Resources
 
+- [Docker Deployment Guide](DOCKER-DEPLOYMENT.md)
 - [Blazor Server Documentation](https://docs.microsoft.com/en-us/aspnet/core/blazor/)
 - [Entity Framework Core](https://docs.microsoft.com/en-us/ef/core/)
 - [SignalR Documentation](https://docs.microsoft.com/en-us/aspnet/core/signalr/)
-- [IIS Deployment](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/)
 
 ## 📄 License
 
@@ -314,17 +231,18 @@ This project is provided as-is for internal use.
 
 For issues or questions:
 1. Check this README
-2. Review code comments (comprehensive help included)
-3. Check browser console for errors
-4. Review IIS logs: `C:\inetpub\logs\LogFiles`
+2. Review [DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md)
+3. Check browser console for errors (F12)
+4. Review application logs
 
 ## 🔐 Security Notes
 
-- **Air-Gapped Environment:** No external dependencies after deployment
-- **Authentication:** Add Windows Authentication in IIS for production
-- **HTTPS:** Configure SSL certificates in IIS
-- **Database:** Protect `dashboard.db` with NTFS permissions
+- **Docker Deployment:** Use SSH keys for secure deployment
+- **Authentication:** Add authentication middleware for production
+- **HTTPS:** Configure SSL certificates
+- **Database:** Protect database file with appropriate permissions
+- **Secrets:** Use GitHub Secrets for sensitive configuration
 
 ---
 
-**Built with ❤️ using C# and Blazor - No JavaScript Required!**
+**Built with ❤️ using .NET 9.0, Blazor Server, and C# - No JavaScript Required!**

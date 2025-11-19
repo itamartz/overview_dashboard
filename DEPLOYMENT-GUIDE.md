@@ -1,353 +1,379 @@
-# Deployment Guide - IT Infrastructure Dashboard
+# Deployment Guide - Overview Dashboard
 
-## Part 1: Upload to GitHub
+This guide covers deploying the Overview Dashboard using Docker or as a Windows Service.
 
-Since I cannot directly push to GitHub from this environment, follow these steps:
+## Deployment Options
 
-### Step 1: Download the Project Archive
-
-1. Download the file: `IT-Dashboard-Complete.tar.gz`
-2. Extract it on your Windows machine using 7-Zip or similar tool
-
-### Step 2: Upload to GitHub
-
-**Option A: Using Git Command Line**
-
-```powershell
-# Navigate to extracted folder
-cd DashboardSystem
-
-# Initialize (already done, but verify)
-git remote -v
-
-# If no remote, add it:
-git remote add origin https://github.com/itamartz/overview_dashboard.git
-
-# Push to GitHub
-git push -u origin main
-```
-
-**Option B: Using GitHub Desktop**
-
-1. Open GitHub Desktop
-2. File → Add Local Repository
-3. Select the `DashboardSystem` folder
-4. Click "Publish repository"
-5. Choose your account and repository name
-
-**Option C: Manual Upload via GitHub Web**
-
-1. Go to https://github.com/itamartz/overview_dashboard
-2. Click "uploading an existing file"
-3. Drag and drop all folders/files
-4. Commit changes
+1. **Docker Deployment (Recommended)** - Automated via GitHub Actions
+2. **Windows Service** - Traditional Windows deployment
 
 ---
 
-## Part 2: Deploy to IIS (Air-Gapped Environment)
+## Option 1: Docker Deployment (Recommended)
 
-### Prerequisites on Target Server
+For complete Docker deployment instructions, see **[DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md)**.
 
-1. **Windows Server 2012 R2+** with IIS installed
-2. **.NET 8.0 Hosting Bundle** (download offline installer before going to air-gap)
-   - Download from: https://dotnet.microsoft.com/download/dotnet/8.0
-   - Install file: `dotnet-hosting-8.0.x-win.exe`
+### Quick Summary:
 
-### Step-by-Step Deployment
+#### Prerequisites:
+- GCP instance (or any server) with Docker installed
+- GitHub repository with Actions enabled
+- SSH access to deployment server
 
-#### 1. Build the Projects (On Development Machine with Internet)
+#### Setup Steps:
+
+1. **Configure GitHub Secrets:**
+   - `GCP_HOST` - Server IP address
+   - `GCP_USERNAME` - SSH username
+   - `GCP_SSH_KEY` - Private SSH key
+
+2. **Push to Main Branch:**
+   ```bash
+   git push origin main
+   ```
+
+3. **GitHub Actions Workflow:**
+   - Automatically builds Docker image
+   - Transfers to your server
+   - Deploys container with persistent storage
+   - Accessible at `http://[YOUR_SERVER_IP]`
+
+#### Container Details:
+- **Ports:** 80:8080 (HTTP), 443:8081 (HTTPS)
+- **Data Volume:** `/var/overview-dashboard/data` → `/app/Database`
+- **Restart Policy:** `unless-stopped`
+
+---
+
+## Option 2: Windows Service Deployment
+
+### Prerequisites:
+
+- Windows Server 2012 R2 or newer
+- .NET 9.0 Runtime
+- Administrator access
+
+### Step 1: Publish the Application
 
 ```powershell
-# Clone from GitHub
-git clone https://github.com/itamartz/overview_dashboard.git
+# Navigate to project root
 cd overview_dashboard
 
-# Publish API (self-contained for air-gap)
-cd DashboardAPI
-dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=false -o ..\Publish\API
-
-# Publish Blazor Dashboard (self-contained)
-cd ..\BlazorDashboard
-dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=false -o ..\Publish\Dashboard
-
-# Create database with migrations
-cd ..\DashboardAPI
-dotnet ef database update
+# Publish for Windows
+dotnet publish OverviewDashboard/OverviewDashboard.csproj `
+    -c Release `
+    -r win-x64 `
+    --self-contained true `
+    -o ./Publish
 ```
 
-#### 2. Copy Files to Production Server
+### Step 2: Copy to Server
 
-Transfer these folders to your air-gapped server:
+Transfer the `Publish` folder to your server (e.g., `C:\Services\OverviewDashboard`)
 
-```
-Publish/
-├── API/              # Copy to: C:\inetpub\DashboardAPI
-├── Dashboard/        # Copy to: C:\inetpub\BlazorDashboard
-└── database.db       # From DashboardAPI folder
-```
+### Step 3: Install as Windows Service
 
-#### 3. Setup IIS (Run PowerShell as Administrator)
+**Option A: Using PowerShell Script**
 
 ```powershell
-# Import IIS module
-Import-Module WebAdministration
-
-# Create Application Pools
-New-WebAppPool -Name "DashboardAPI_Pool"
-Set-ItemProperty IIS:\AppPools\DashboardAPI_Pool -Name "managedRuntimeVersion" -Value ""
-Set-ItemProperty IIS:\AppPools\DashboardAPI_Pool -Name "startMode" -Value "AlwaysRunning"
-
-New-WebAppPool -Name "BlazorDashboard_Pool"
-Set-ItemProperty IIS:\AppPools\BlazorDashboard_Pool -Name "managedRuntimeVersion" -Value ""
-Set-ItemProperty IIS:\AppPools\BlazorDashboard_Pool -Name "startMode" -Value "AlwaysRunning"
-
-# Create Websites
-New-WebSite -Name "DashboardAPI" `
-    -Port 5000 `
-    -PhysicalPath "C:\inetpub\DashboardAPI" `
-    -ApplicationPool "DashboardAPI_Pool"
-
-New-WebSite -Name "BlazorDashboard" `
-    -Port 5001 `
-    -PhysicalPath "C:\inetpub\BlazorDashboard" `
-    -ApplicationPool "BlazorDashboard_Pool"
-
-# Enable WebSockets (required for SignalR)
-Set-WebConfigurationProperty `
-    -PSPath "IIS:\Sites\BlazorDashboard" `
-    -Filter "system.webServer/webSocket" `
-    -Name "enabled" `
-    -Value "True"
+# Run the included script as Administrator
+.\Deploy-WindowsService.ps1
 ```
 
-#### 4. Configure Firewall
+**Option B: Manual Installation**
 
 ```powershell
-# Allow inbound traffic
-New-NetFirewallRule -DisplayName "Dashboard API" -Direction Inbound -LocalPort 5000 -Protocol TCP -Action Allow
-New-NetFirewallRule -DisplayName "Blazor Dashboard" -Direction Inbound -LocalPort 5001 -Protocol TCP -Action Allow
+# Create the service
+sc create OverviewDashboard `
+    binPath="C:\Services\OverviewDashboard\OverviewDashboard.exe" `
+    start=auto `
+    DisplayName="Overview Dashboard"
+
+# Start the service
+sc start OverviewDashboard
+
+# Verify it's running
+sc query OverviewDashboard
 ```
 
-#### 5. Update Configuration Files
+### Step 4: Configure Firewall
 
-**C:\inetpub\BlazorDashboard\appsettings.json**
-
-```json
-{
-  "ApiSettings": {
-    "BaseUrl": "http://localhost:5000"
-  },
-  "RefreshInterval": 30000
-}
+```powershell
+# Allow HTTP traffic
+New-NetFirewallRule `
+    -DisplayName "Overview Dashboard" `
+    -Direction Inbound `
+    -LocalPort 5203 `
+    -Protocol TCP `
+    -Action Allow
 ```
 
-**C:\inetpub\DashboardAPI\appsettings.json**
+### Step 5: Access the Dashboard
+
+Navigate to: `http://[SERVER_IP]:5203`
+
+---
+
+## Configuration
+
+### Database Location
+
+Edit `appsettings.json`:
 
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Data Source=C:\\inetpub\\Shared\\dashboard.db"
-  },
-  "AllowedHosts": "*",
-  "Cors": {
-    "AllowedOrigins": [
-      "http://localhost:5001",
-      "http://your-dashboard-server:5001"
-    ]
+    "DefaultConnection": "Data Source=C:\\Services\\OverviewDashboard\\Database\\dashboard.db"
   }
 }
 ```
 
-#### 6. Setup Database Location
+### Change Port
+
+Edit `appsettings.json` or use command line:
 
 ```powershell
-# Create shared folder
-New-Item -ItemType Directory -Path "C:\inetpub\Shared" -Force
+# Via environment variable
+$env:ASPNETCORE_URLS="http://localhost:8080"
 
-# Copy database
-Copy-Item ".\database.db" -Destination "C:\inetpub\Shared\dashboard.db"
-
-# Set permissions
-icacls "C:\inetpub\Shared" /grant "IIS AppPool\DashboardAPI_Pool:(OI)(CI)M"
-icacls "C:\inetpub\Shared" /grant "IIS AppPool\BlazorDashboard_Pool:(OI)(CI)R"
+# Or in appsettings.json
+{
+  "Kestrel": {
+    "Endpoints": {
+      "Http": {
+        "Url": "http://localhost:8080"
+      }
+    }
+  }
+}
 ```
 
-#### 7. Start Services
+### Logging Configuration
 
-```powershell
-# Start websites
-Start-WebSite -Name "DashboardAPI"
-Start-WebSite -Name "BlazorDashboard"
-
-# Verify they're running
-Get-WebSite | Select Name, State, Bindings
-```
-
-#### 8. Test the Deployment
-
-1. **Test API:**
-   ```powershell
-   Invoke-WebRequest -Uri "http://localhost:5000/api/dashboard/systems"
-   ```
-
-2. **Open Dashboard:**
-   - Navigate to: `http://localhost:5001`
-   - Or: `http://server-name:5001`
-
----
-
-## Part 3: Install PowerShell Agents on Monitored Servers
-
-### On Each Server You Want to Monitor:
-
-```powershell
-# Copy PowerShellAgent folder to server
-Copy-Item -Recurse PowerShellAgent C:\Tools\DashboardAgent
-
-# Install as scheduled task
-cd C:\Tools\DashboardAgent
-.\Install-MetricsAgent.ps1 `
-    -ApiUrl "http://dashboard-server:5000" `
-    -InstallPath "C:\Tools\DashboardAgent" `
-    -IntervalMinutes 5
-```
-
-### Test Agent Manually:
-
-```powershell
-# Import the module
-Import-Module .\DashboardMetrics.psm1
-
-# Send test metric
-Send-ComponentMetric `
-    -ApiUrl "http://dashboard-server:5000/api/metrics" `
-    -ComponentId "COMP001" `
-    -Severity "ok" `
-    -Value "45" `
-    -Metric "%" `
-    -Description "CPU usage is normal"
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}
 ```
 
 ---
 
-## Part 4: Verify Everything Works
+## Updating the Application
 
-### Checklist:
+### Docker Deployment:
 
-- [ ] API responds at `http://server:5000/api/dashboard/systems`
-- [ ] Dashboard loads at `http://server:5001`
-- [ ] SignalR connection established (check browser console - no errors)
-- [ ] PowerShell agent can send metrics
-- [ ] Dashboard updates when agent sends new data
-- [ ] Database file is accessible and not locked
+Simply push changes to GitHub:
 
-### Common Issues:
-
-**1. "HTTP Error 500.19" - Configuration Error**
-```powershell
-# Install URL Rewrite Module (if needed)
-# Download from: https://www.iis.net/downloads/microsoft/url-rewrite
+```bash
+git add .
+git commit -m "Update application"
+git push origin main
 ```
 
-**2. "Database is Locked"**
-```powershell
-# Check which process has the file open
-handle.exe dashboard.db
+GitHub Actions will automatically rebuild and redeploy.
 
-# Stop IIS
-iisreset /stop
-
-# Restart
-iisreset /start
-```
-
-**3. "SignalR Not Connecting"**
-```powershell
-# Verify WebSockets enabled
-Get-WindowsFeature -Name Web-WebSockets
-Install-WindowsFeature -Name Web-WebSockets
-```
-
-**4. "CORS Error in Browser Console"**
-```
-Update Cors.AllowedOrigins in API appsettings.json
-to include your dashboard server URL
-```
-
----
-
-## Part 5: Maintenance
-
-### Update Application:
+### Windows Service:
 
 ```powershell
-# Stop IIS
-iisreset /stop
+# Stop the service
+sc stop OverviewDashboard
 
 # Backup database
-Copy-Item "C:\inetpub\Shared\dashboard.db" "C:\Backups\dashboard_$(Get-Date -Format 'yyyyMMdd').db"
+Copy-Item "C:\Services\OverviewDashboard\Database\dashboard.db" `
+    "C:\Backups\dashboard_$(Get-Date -Format 'yyyyMMdd').db"
 
 # Replace files
-Copy-Item -Recurse ".\NewPublish\API\*" "C:\inetpub\DashboardAPI\" -Force
-Copy-Item -Recurse ".\NewPublish\Dashboard\*" "C:\inetpub\BlazorDashboard\" -Force
+Copy-Item -Recurse ".\Publish\*" "C:\Services\OverviewDashboard\" -Force
 
-# Start IIS
-iisreset /start
+# Start the service
+sc start OverviewDashboard
 ```
 
-### Backup Database Regularly:
+---
+
+## Troubleshooting
+
+### Service Won't Start
 
 ```powershell
-# Schedule this script to run daily
+# Check Windows Event Viewer
+Get-EventLog -LogName Application -Source "Overview Dashboard" -Newest 10
+
+# Check service status
+sc query OverviewDashboard
+
+# Try running manually to see errors
+cd C:\Services\OverviewDashboard
+.\OverviewDashboard.exe
+```
+
+### Database Locked
+
+```powershell
+# Stop the service
+sc stop OverviewDashboard
+
+# Check for file locks
+# Use Process Explorer or similar tool
+
+# Restart
+sc start OverviewDashboard
+```
+
+### Port Already in Use
+
+```powershell
+# Find what's using the port
+netstat -ano | findstr :5203
+
+# Kill the process (use PID from above)
+taskkill /PID [PID] /F
+
+# Or change the port in appsettings.json
+```
+
+### Docker Container Issues
+
+```bash
+# SSH into server
+ssh user@server
+
+# Check container status
+docker ps -a | grep overview-dashboard
+
+# View logs
+docker logs overview-dashboard
+
+# Restart container
+docker restart overview-dashboard
+
+# Remove and redeploy
+docker stop overview-dashboard
+docker rm overview-dashboard
+# Push to GitHub to trigger redeployment
+```
+
+---
+
+## Security Best Practices
+
+### 1. Use HTTPS
+
+**For Docker:**
+- Configure reverse proxy (nginx, Caddy) with SSL
+- Use Let's Encrypt for certificates
+
+**For Windows Service:**
+- Configure Kestrel with SSL certificate
+- Or use IIS as reverse proxy
+
+### 2. Authentication
+
+Add authentication middleware in `Program.cs`:
+
+```csharp
+builder.Services.AddAuthentication(/* your auth scheme */);
+app.UseAuthentication();
+app.UseAuthorization();
+```
+
+### 3. Firewall Rules
+
+Restrict access to known IP addresses:
+
+```powershell
+# Windows Firewall
+New-NetFirewallRule `
+    -DisplayName "Overview Dashboard - Restricted" `
+    -Direction Inbound `
+    -LocalPort 5203 `
+    -Protocol TCP `
+    -Action Allow `
+    -RemoteAddress "192.168.1.0/24"
+```
+
+### 4. Database Backup
+
+**Docker:**
+```bash
+# Automated backup script
+docker exec overview-dashboard cp /app/Database/dashboard.db /app/Database/backup_$(date +%Y%m%d).db
+```
+
+**Windows:**
+```powershell
+# Scheduled task to backup daily
 $date = Get-Date -Format "yyyyMMdd"
-Copy-Item "C:\inetpub\Shared\dashboard.db" "C:\Backups\dashboard_$date.db"
+Copy-Item "C:\Services\OverviewDashboard\Database\dashboard.db" `
+    "C:\Backups\dashboard_$date.db"
 ```
 
-### Monitor Logs:
+---
+
+## Monitoring
+
+### Check Application Health
 
 ```powershell
-# IIS Logs
-Get-Content "C:\inetpub\logs\LogFiles\W3SVC1\u_ex*.log" -Tail 50
+# Test API endpoint
+Invoke-RestMethod -Uri "http://localhost:5203/api/components"
 
-# Application Logs (if configured)
-Get-Content "C:\inetpub\DashboardAPI\logs\*.log" -Tail 50
+# Check Swagger
+Start-Process "http://localhost:5203/swagger"
+```
+
+### View Logs
+
+**Docker:**
+```bash
+docker logs --tail 100 -f overview-dashboard
+```
+
+**Windows Service:**
+- Check Windows Event Viewer
+- Application logs (if configured in appsettings.json)
+
+---
+
+## Performance Tuning
+
+### Database Optimization
+
+For production with many components, consider:
+- Regular VACUUM operations on SQLite
+- Or migrate to SQL Server/PostgreSQL
+
+### Kestrel Configuration
+
+```json
+{
+  "Kestrel": {
+    "Limits": {
+      "MaxConcurrentConnections": 100,
+      "MaxConcurrentUpgradedConnections": 100
+    }
+  }
+}
 ```
 
 ---
 
-## Security Recommendations
+## Next Steps
 
-1. **Enable Windows Authentication in IIS:**
-   ```powershell
-   Set-WebConfigurationProperty `
-       -Filter "/system.webServer/security/authentication/windowsAuthentication" `
-       -Name "enabled" `
-       -Value "True" `
-       -PSPath "IIS:\Sites\BlazorDashboard"
-   ```
+1. ✅ Deploy the application
+2. ✅ Configure firewall rules
+3. ✅ Set up HTTPS (recommended)
+4. ✅ Configure authentication (if needed)
+5. ✅ Set up automated backups
+6. ✅ Monitor application health
 
-2. **Use HTTPS with SSL Certificate:**
-   ```powershell
-   # Bind SSL certificate to site
-   New-WebBinding -Name "BlazorDashboard" -Protocol https -Port 443
-   ```
-
-3. **Restrict API Access:**
-   - Use firewall rules to limit which servers can call the API
-   - Consider IP whitelisting
-
-4. **Database Encryption:**
-   - Use BitLocker on the volume containing the database
-   - Or use SQLCipher for SQLite encryption
+For Docker-specific deployment details, see **[DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md)**.
 
 ---
-
-## Support
-
-For issues:
-1. Check browser console (F12) for JavaScript errors
-2. Review IIS logs
-3. Check Windows Event Viewer → Application logs
-4. Verify database permissions
 
 **Your dashboard is now ready for production use!** 🎉

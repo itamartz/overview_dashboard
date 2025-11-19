@@ -1,119 +1,93 @@
-# IT Infrastructure Dashboard - Project Summary
+# Overview Dashboard - Project Summary
 
-## 📦 What You're Getting
+## 📦 What You Have
 
-A complete, production-ready IT infrastructure monitoring system with:
+A production-ready IT infrastructure monitoring system with:
 
-### ✅ **Complete Source Code**
-- ASP.NET Core Web API (old Program.cs style as requested)
-- Blazor Server Dashboard
-- Entity Framework Core with SQLite
-- PowerShell data collection agents
-- All configuration files
+### ✅ **Complete Application**
+- Blazor Server dashboard with real-time updates
+- Built-in REST API with Swagger documentation
+- Entity Framework Core with SQLite database
+- Docker deployment via GitHub Actions
+- Windows Service support
 
-### ✅ **Ready for Air-Gapped Deployment**
-- Self-contained publish option included
-- No external CDN dependencies
-- SQLite database (no server required)
-- Works completely offline after deployment
+### ✅ **Modern Deployment**
+- Docker containerization
+- GitHub Actions CI/CD pipeline
+- Automated deployment to GCP (or any Docker host)
+- Windows Service as alternative deployment
 
 ### ✅ **Comprehensive Documentation**
-- README.md - Full project documentation
-- DEPLOYMENT-GUIDE.md - Step-by-step IIS deployment
-- QUICK-START.md - Quick reference for common tasks
-- Inline code comments with PowerShell help
+- README.md - Project overview and quick start
+- DOCKER-DEPLOYMENT.md - Complete Docker deployment guide
+- DEPLOYMENT-GUIDE.md - Windows Service deployment
+- QUICK-START.md - Quick reference guide
 
 ---
 
-## 🎯 Key Features Delivered
+## 🎯 Key Features
 
 ### 1. **Real-Time Dashboard**
-- Live updates via SignalR (no page refresh needed)
-- Hierarchical navigation (Systems → Projects → Components)
-- Color-coded severity levels (OK, Warning, Error, Info)
-- Summary cards showing counts at-a-glance
-- Data table with filtering and sorting
+- Live updates via SignalR (no page refresh)
+- Hierarchical data display (Systems → Projects → Components)
+- Color-coded status indicators (good, warning, error, info)
+- Responsive design with modern UI
 
 ### 2. **REST API**
-- Built with ASP.NET Core Web API
-- **Old Program.cs style** (not minimal API) - as requested
-- Swagger/OpenAPI documentation included
-- CORS configured for dashboard access
-- Entity Framework Core with code-first migrations
+- Built with ASP.NET Core
+- Swagger/OpenAPI documentation at `/swagger`
+- Full CRUD operations for components
+- JSON payload support for flexible data structures
 
 ### 3. **Database**
 - SQLite for simplicity (file-based, no server needed)
-- Entity Framework Core models
+- Entity Framework Core with automatic migrations
 - Seeded with sample data for testing
-- Easy to migrate to SQL Server if needed later
+- Easy to migrate to SQL Server/PostgreSQL if needed
 
-### 4. **PowerShell Agents**
-- Collect system metrics (CPU, Memory, Disk, Services)
-- Send data to API via REST calls
-- Can run as scheduled task
-- **Full PowerShell 5.1 compatible** - as requested
-- **Built-in help in functions** - as requested
-
-### 5. **IIS Deployment Ready**
-- Can be hosted in IIS
-- Includes deployment scripts
-- Supports Windows Authentication
-- WebSocket enabled for SignalR
+### 4. **Deployment Options**
+- **Docker (Primary):** Automated via GitHub Actions
+- **Windows Service:** Traditional Windows deployment
+- Self-contained or framework-dependent builds
 
 ---
 
-## 📂 File Structure
+## 📂 Project Structure
 
 ```
-IT-Dashboard-Complete.tar.gz
+overview_dashboard/
+├── OverviewDashboard/              # Main Blazor Server Application
+│   ├── Components/                 # Blazor components
+│   │   └── Pages/                  # Razor pages (Home.razor)
+│   ├── Controllers/                # API controllers
+│   │   └── ComponentsController.cs # REST API endpoints
+│   ├── Data/                       # EF Core DbContext
+│   │   └── DashboardDbContext.cs   # Database context
+│   ├── DTOs/                       # Data Transfer Objects
+│   │   └── ComponentDto.cs         # API DTOs
+│   ├── Models/                     # Entity models
+│   │   └── Component.cs            # Component entity
+│   ├── wwwroot/                    # Static files
+│   │   └── css/dashboard.css       # Dashboard styles
+│   ├── Program.cs                  # Application entry point
+│   ├── appsettings.json            # Configuration
+│   └── OverviewDashboard.csproj    # Project file
 │
-├── DashboardAPI/                    # ASP.NET Core Web API
-│   ├── Controllers/
-│   │   ├── MetricsController.cs     # Receives metrics from agents
-│   │   └── DashboardController.cs   # Serves data to dashboard
-│   ├── Models/
-│   │   ├── SystemEntity.cs          # System entity model
-│   │   ├── Project.cs               # Project entity model
-│   │   ├── Component.cs             # Component entity model
-│   │   └── ComponentMetric.cs       # Metric entity model
-│   ├── Data/
-│   │   └── DashboardDbContext.cs    # EF Core DbContext with SQLite
-│   ├── DTOs/
-│   │   └── DashboardDtos.cs         # Data transfer objects
-│   ├── Program.cs                   # OLD STYLE Program.cs (as requested)
-│   ├── Startup.cs                   # Service configuration
-│   ├── appsettings.json             # Configuration
-│   └── DashboardAPI.csproj          # Project file with NuGet packages
+├── Database/                       # SQLite database location
+│   └── dashboard.db                # Created automatically
 │
-├── BlazorDashboard/                 # Blazor Server Application
-│   ├── Pages/
-│   │   └── Index.razor              # Main dashboard page
-│   ├── Services/
-│   │   └── DashboardService.cs      # API communication service
-│   ├── Models/
-│   │   └── DashboardModels.cs       # View models
-│   ├── wwwroot/
-│   │   └── css/
-│   │       └── app.css              # Dashboard styles
-│   ├── Program.cs                   # Blazor Server entry point
-│   ├── Startup.cs                   # SignalR configuration
-│   └── BlazorDashboard.csproj       # Project file
+├── .github/workflows/              # GitHub Actions
+│   └── deploy-to-gcp.yml           # Deployment workflow
 │
-├── PowerShellAgent/                 # Data Collection Scripts
-│   ├── DashboardMetrics.psm1        # PowerShell module with functions
-│   ├── Install-MetricsAgent.ps1     # Installer (scheduled task setup)
-│   └── Example-SendMetrics.ps1      # Usage examples
+├── Dockerfile                      # Docker configuration
+├── .dockerignore                   # Docker build exclusions
+├── Deploy-WindowsService.ps1       # Windows Service installer
 │
-├── Database/
-│   └── 01_CreateDatabase.sql        # SQL reference (using EF instead)
-│
-├── Deployment/
-│   └── (IIS deployment scripts)
-│
-├── Documentation/
-│   └── (Additional docs)
-│
-└── README.md                        # Main documentation
+└── Documentation/
+    ├── README.md                   # Main documentation
+    ├── DOCKER-DEPLOYMENT.md        # Docker guide
+    ├── DEPLOYMENT-GUIDE.md         # Deployment options
+    └── QUICK-START.md              # Quick reference
 ```
 
 ---
@@ -121,255 +95,249 @@ IT-Dashboard-Complete.tar.gz
 ## 🔧 Technology Stack
 
 ### Backend:
-- **.NET 8.0** - Latest LTS version
-- **ASP.NET Core Web API** - RESTful API
-- **Entity Framework Core 8.0** - ORM
+- **.NET 9.0** - Latest .NET version
+- **ASP.NET Core** - Web framework
+- **Blazor Server** - Server-side rendering
+- **Entity Framework Core 9.0** - ORM
 - **SQLite** - Database
 - **Swagger/Swashbuckle** - API documentation
 
 ### Frontend:
-- **Blazor Server** - Server-side rendering
+- **Blazor Components** - C# Razor components
 - **SignalR** - Real-time communication
-- **C# Razor Components** - No JavaScript required
-
-### Agents:
-- **PowerShell 5.1** - Windows automation
-- **REST API calls** - HTTP communication
+- **CSS** - Custom styling
+- **No JavaScript** - Pure C# application
 
 ### Deployment:
-- **IIS** - Web server
-- **Windows Server** - Host OS
+- **Docker** - Containerization
+- **GitHub Actions** - CI/CD
+- **Windows Service** - Alternative deployment
 
 ---
 
-## 📊 Sample Data Included
+## 📊 Sample Data
 
-The database is pre-seeded with realistic example data:
+The database is pre-seeded with example data:
 
 ### 3 Systems:
-1. Production Environment
-2. Development Environment
-3. Database Cluster
+1. **ActiveDirectory** - User audit data
+2. **vCenter** - Storage health metrics
+3. **WSUS** - Patch compliance information
 
-### 7 Projects:
-1. Web Servers (Production)
-2. Application Servers (Production)
-3. Load Balancers (Production)
-4. Dev Web Servers (Development)
-5. Test Environment (Development)
-6. SQL Primary Node (Database)
-7. SQL Secondary Nodes (Database)
+### 3 Projects:
+1. **UserAudit** (ActiveDirectory)
+2. **StorageHealth** (vCenter)
+3. **PatchCompliance** (WSUS)
 
-### 28 Components:
-- Web servers (WEB-01, WEB-02, etc.)
-- Application servers (APP-01, APP-02)
-- Database servers (SQL-01, SQL-02)
-- Services (IIS, App Pools, SQL Service)
-- Infrastructure (Load Balancers)
-
-### Metrics:
-- CPU usage (%)
-- Memory usage (%)
-- Disk space (GB Free)
-- Service status
-- Network connections
-- Database connections
+### 3 Components:
+- Sample component for each system with JSON payload
+- Demonstrates different severity levels
+- Shows flexible data structure
 
 ---
 
 ## 🚀 Deployment Options
 
-### Option 1: Development/Testing
-```powershell
-dotnet run  # Both API and Dashboard
-# Access: http://localhost:5001
+### Option 1: Docker (Recommended)
+
+```bash
+# Automated via GitHub Actions
+git push origin main
+# Workflow builds and deploys automatically
 ```
 
-### Option 2: IIS Production (Self-Contained)
+**Benefits:**
+- Automated deployment
+- Consistent environment
+- Easy rollback
+- Portable across platforms
+
+### Option 2: Windows Service
+
 ```powershell
-dotnet publish -c Release -r win-x64 --self-contained true
-# Deploy to IIS
-# No .NET Runtime needed on server
+# Publish and install
+dotnet publish -c Release -o ./Publish
+.\Deploy-WindowsService.ps1
 ```
 
-### Option 3: IIS Production (Framework-Dependent)
-```powershell
-dotnet publish -c Release
-# Deploy to IIS
-# Requires .NET 8.0 Runtime on server
-```
+**Benefits:**
+- Native Windows integration
+- Runs as system service
+- Auto-start on boot
+- Windows Event Log integration
 
 ---
 
 ## 🎓 How to Use
 
-### For IT Administrators (Non-Developers):
+### For Developers:
 
-1. **Extract the archive** on your Windows machine
-2. **Install .NET 8.0 SDK** (download from Microsoft)
-3. **Run the quick start** (see QUICK-START.md)
-4. **Customize the sample data** for your environment
-5. **Deploy to IIS** (see DEPLOYMENT-GUIDE.md)
-6. **Install agents** on servers you want to monitor
-
-### No Programming Required!
-- Configuration is via JSON files
-- PowerShell scripts provided for common tasks
-- All code has detailed comments
-- Step-by-step guides included
-
----
-
-## 💰 Estimated Token Usage & Time
-
-### Token Usage:
-- **Used:** ~59,000 tokens
-- **Remaining:** ~131,000 tokens
-- **Well within budget!**
-
-### Time Invested:
-- Project structure: 10 min
-- API development: 15 min
-- Blazor dashboard: 20 min
-- PowerShell agents: 10 min
-- Documentation: 25 min
-- **Total: ~80 minutes**
-
----
-
-## ✅ Requirements Met
-
-All your requirements have been fulfilled:
-
-1. ✅ **PowerShell 5.1 code provided** - DashboardMetrics.psm1
-2. ✅ **C# code provided** - API and Blazor app
-3. ✅ **Built-in help in PowerShell functions** - All functions documented
-4. ✅ **ASP.NET Core with old Program.cs** - Not minimal API
-5. ✅ **Works in air-gapped environment** - Self-contained deployment
-6. ✅ **Microsoft Server compatible** - IIS ready
-7. ✅ **No developer needed** - Configuration-driven
-8. ✅ **Dynamic updates** - SignalR real-time
-9. ✅ **Hosts on IIS** - Deployment guide included
-10. ✅ **Uses EF Core with SQLite** - No SQL Server needed
-
----
-
-## 📝 What to Do Next
-
-### Immediate Next Steps:
-
-1. **Download the archive:** `IT-Dashboard-Complete.tar.gz`
-
-2. **Extract it:**
+1. **Clone and run:**
    ```powershell
-   tar -xzf IT-Dashboard-Complete.tar.gz
+   git clone https://github.com/itamartz/overview_dashboard.git
+   cd overview_dashboard
+   dotnet run --project OverviewDashboard/OverviewDashboard.csproj
    ```
 
-3. **Upload to GitHub:**
-   ```powershell
-   cd DashboardSystem
-   git push -u origin main
-   ```
+2. **Explore the code:**
+   - All files have clear structure
+   - API controllers in `Controllers/`
+   - Blazor pages in `Components/Pages/`
+   - Database models in `Models/`
 
-4. **Or skip GitHub and deploy directly:**
-   - Follow DEPLOYMENT-GUIDE.md
-   - Deploy to your IIS server
-   - Start monitoring!
+3. **Test the API:**
+   - Navigate to `/swagger`
+   - Try out endpoints
+   - View request/response schemas
 
-### For GitHub Upload:
+### For IT Administrators:
 
-Since I couldn't push directly due to network restrictions:
-1. Extract the archive on your machine
-2. Navigate to the `DashboardSystem` folder
-3. Run: `git push -u origin main`
-4. Your code will be on GitHub at: https://github.com/itamartz/overview_dashboard
+1. **Deploy with Docker:**
+   - Follow [DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md)
+   - Configure GitHub Secrets
+   - Push to trigger deployment
+
+2. **Or deploy as Windows Service:**
+   - Follow [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md)
+   - Run PowerShell script
+   - Configure firewall
+
+3. **Monitor and maintain:**
+   - Access dashboard at server URL
+   - Use API to add/update components
+   - Backup database regularly
 
 ---
 
-## 🎯 Customization Guide
+## ✅ Features Delivered
 
-### Add Your Own Servers:
+1. ✅ **Unified application** - Single project, not separate API and Dashboard
+2. ✅ **Docker deployment** - Automated via GitHub Actions
+3. ✅ **Windows Service support** - Alternative deployment option
+4. ✅ **Real-time updates** - SignalR integration
+5. ✅ **REST API** - Full CRUD operations
+6. ✅ **Swagger documentation** - Interactive API docs
+7. ✅ **SQLite database** - No external database needed
+8. ✅ **Sample data** - Ready to test
+9. ✅ **Comprehensive docs** - Multiple guides included
+10. ✅ **.NET 9.0** - Latest technology
 
-**Option 1: Via Database**
-```sql
--- Add in SQLite
-INSERT INTO Systems (SystemId, Name, Description, IsActive, CreatedDate, ModifiedDate)
-VALUES ('SYS004', 'Your System', 'Description', 1, datetime('now'), datetime('now'));
-```
+---
 
-**Option 2: Via Code**
-```csharp
-// Update DashboardDbContext.cs SeedData() method
-modelBuilder.Entity<SystemEntity>().HasData(
-    new SystemEntity { Id = 4, SystemId = "SYS004", Name = "Your System", ... }
-);
-```
+## 📝 Next Steps
 
-### Modify PowerShell Agent:
+### Immediate:
 
-Edit `DashboardMetrics.psm1`:
+1. **Test locally:**
+   ```powershell
+   dotnet run --project OverviewDashboard/OverviewDashboard.csproj
+   ```
+
+2. **Explore the dashboard:**
+   - Open `http://localhost:5203`
+   - View sample data
+   - Test real-time updates
+
+3. **Try the API:**
+   - Open `http://localhost:5203/swagger`
+   - Test endpoints
+   - Add new components
+
+### For Production:
+
+1. **Choose deployment method:**
+   - Docker (recommended) - see DOCKER-DEPLOYMENT.md
+   - Windows Service - see DEPLOYMENT-GUIDE.md
+
+2. **Configure:**
+   - Set up GitHub Secrets (for Docker)
+   - Or configure Windows Service
+   - Set up firewall rules
+
+3. **Deploy:**
+   - Push to GitHub (Docker)
+   - Or run installer script (Windows)
+
+4. **Customize:**
+   - Add your systems and projects
+   - Modify styling
+   - Integrate data sources
+
+---
+
+## 🎯 Customization
+
+### Add Your Data:
+
 ```powershell
-# Add your custom metrics
-function Get-CustomMetric {
-    # Your logic here
+# Via API
+Invoke-RestMethod -Uri "http://localhost:5203/api/components" `
+    -Method POST `
+    -ContentType "application/json" `
+    -Body '{
+        "systemName": "YourSystem",
+        "projectName": "YourProject",
+        "payload": "{\"status\": \"good\", \"value\": 100}"
+    }'
+```
+
+### Modify Styling:
+
+Edit `OverviewDashboard/wwwroot/css/dashboard.css`
+
+### Change Database:
+
+Edit `appsettings.json`:
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Data Source=/your/path/dashboard.db"
+  }
 }
 ```
 
-### Change Update Frequency:
+---
 
-**Dashboard:**
-- Edit `appsettings.json` → `RefreshInterval` (milliseconds)
+## 🎁 What's Included
 
-**Agent:**
-- Modify scheduled task interval when installing
-- Or edit existing task in Task Scheduler
+- ✅ Complete source code
+- ✅ Docker configuration
+- ✅ GitHub Actions workflow
+- ✅ Windows Service installer
+- ✅ Sample data
+- ✅ API documentation (Swagger)
+- ✅ Multiple deployment guides
+- ✅ Troubleshooting tips
 
 ---
 
-## 🎁 Bonus Features Included
+## 📞 Support
 
-1. **Swagger UI** - Interactive API testing at `/swagger`
-2. **Sample Data** - Ready-to-test hierarchy
-3. **Error Handling** - Comprehensive try/catch blocks
-4. **Logging** - ILogger integration
-5. **CORS** - Pre-configured for dashboard
-6. **Validation** - Model validation on API
-7. **Comments** - Every function documented
-8. **Type Safety** - Strongly-typed throughout
+### Documentation:
+1. [README.md](README.md) - Overview and quick start
+2. [DOCKER-DEPLOYMENT.md](DOCKER-DEPLOYMENT.md) - Docker deployment
+3. [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md) - All deployment options
+4. [QUICK-START.md](QUICK-START.md) - Quick reference
 
----
-
-## 📞 Support Resources
-
-### Included Documentation:
-1. **README.md** - Complete project overview
-2. **DEPLOYMENT-GUIDE.md** - IIS deployment steps
-3. **QUICK-START.md** - Common tasks reference
-4. **Code Comments** - Every file documented
-
-### External Resources:
+### Resources:
 - Blazor Docs: https://docs.microsoft.com/aspnet/core/blazor
 - EF Core Docs: https://docs.microsoft.com/ef/core
-- PowerShell Docs: https://docs.microsoft.com/powershell
+- Docker Docs: https://docs.docker.com
 
 ---
 
 ## 🎉 You're All Set!
 
-Everything you need is in the archive:
-- ✅ Complete source code
-- ✅ Database schema and sample data
-- ✅ PowerShell collection agents
-- ✅ Deployment guides
-- ✅ Configuration examples
-- ✅ Troubleshooting tips
+Everything you need is in this repository:
+- ✅ Modern .NET 9.0 application
+- ✅ Docker deployment ready
+- ✅ Windows Service support
+- ✅ Complete documentation
+- ✅ Sample data for testing
 
-**Just extract, build, and deploy!**
+**Just clone, build, and deploy!**
 
 ---
 
-_Built specifically for your air-gapped Microsoft environment_
-_No developers required for maintenance_
-_Pure C# and PowerShell - technologies you already know_
-
-**Enjoy your new monitoring dashboard!** 🚀
+_Built with .NET 9.0, Blazor Server, and Entity Framework Core_
+_No JavaScript required - Pure C# application_
