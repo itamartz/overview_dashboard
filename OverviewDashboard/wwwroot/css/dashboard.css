@@ -84,12 +84,10 @@ body {
 
 .nav-item:hover {
     background: #34495e;
-    border-left-color: #3498db;
 }
 
 .nav-item.active {
     background: #34495e;
-    border-left-color: #3498db;
     font-weight: 600;
 }
 
@@ -142,7 +140,6 @@ body {
 
 .nav-subitem.active {
     background: #34495e;
-    color: #3498db;
 }
 
 /* Right Content Area */

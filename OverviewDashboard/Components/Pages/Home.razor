@@ -29,8 +29,8 @@
                 var errorCount = systemGroup.Count(c => GetSeverity(c) == "error");
                 var warningCount = systemGroup.Count(c => GetSeverity(c) == "warning");
 
-                <div class="nav-item @(isSystemSelected ? "active" : "")">
-                    <span class="nav-item-name" @onclick="() => SelectSystem(systemName)">@systemName</span>
+                <div class="nav-item @(isSystemSelected ? "active" : "")" @onclick="() => SelectSystem(systemName)">
+                    <span class="nav-item-name">@systemName</span>
                     <div style="display: flex; gap: 5px; align-items: center;">
                         @if (errorCount > 0)
                         {
@@ -53,8 +53,8 @@
                         var projectErrorCount = projectGroup.Count(c => GetSeverity(c) == "error");
                         var projectWarningCount = projectGroup.Count(c => GetSeverity(c) == "warning");
 
-                        <div class="nav-subitem @(isProjectSelected ? "active" : "")">
-                            <span @onclick="() => SelectProject(systemName, projectName)">@projectName</span>
+                        <div class="nav-subitem @(isProjectSelected ? "active" : "")" @onclick="() => SelectProject(systemName, projectName)">
+                            <span>@projectName</span>
                             <div style="display: flex; gap: 5px; align-items: center;">
                                 @if (projectErrorCount > 0)
                                 {
@@ -302,13 +302,15 @@
     {
         await LoadData();
     }
-
     private void SelectSystem(string systemName)
     {
         selectedSystem = systemName;
         selectedProject = null;
-        contentTitle = systemName;
-        contentSubtitle = "All Projects";
+        contentTitle = $"{systemName} Overview";
+        contentSubtitle = "System Details";
+        
+        activeFilter = null;
+        _searchText = "";
         
         contextComponents = components.Where(c => c.SystemName == systemName).ToList();
         ApplyFilters();
@@ -320,6 +322,9 @@
         selectedProject = projectName;
         contentTitle = $"{systemName} - {projectName}";
         contentSubtitle = "Project Details";
+        
+        activeFilter = null;
+        _searchText = "";
         
         contextComponents = components.Where(c => c.SystemName == systemName && c.ProjectName == projectName).ToList();
         ApplyFilters();
