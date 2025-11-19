@@ -290,11 +290,11 @@
         
         if (selectedProject != null && selectedSystem != null)
         {
-            SelectProject(selectedSystem, selectedProject);
+            SelectProject(selectedSystem, selectedProject, resetFilters: false);
         }
         else if (selectedSystem != null)
         {
-            SelectSystem(selectedSystem);
+            SelectSystem(selectedSystem, resetFilters: false);
         }
     }
 
@@ -302,29 +302,35 @@
     {
         await LoadData();
     }
-    private void SelectSystem(string systemName)
+    private void SelectSystem(string systemName, bool resetFilters = true)
     {
         selectedSystem = systemName;
         selectedProject = null;
         contentTitle = $"{systemName} Overview";
         contentSubtitle = "System Details";
         
-        activeFilter = null;
-        _searchText = "";
+        if (resetFilters)
+        {
+            activeFilter = null;
+            _searchText = "";
+        }
         
         contextComponents = components.Where(c => c.SystemName == systemName).ToList();
         ApplyFilters();
     }
 
-    private void SelectProject(string systemName, string projectName)
+    private void SelectProject(string systemName, string projectName, bool resetFilters = true)
     {
         selectedSystem = systemName;
         selectedProject = projectName;
         contentTitle = $"{systemName} - {projectName}";
         contentSubtitle = "Project Details";
         
-        activeFilter = null;
-        _searchText = "";
+        if (resetFilters)
+        {
+            activeFilter = null;
+            _searchText = "";
+        }
         
         contextComponents = components.Where(c => c.SystemName == systemName && c.ProjectName == projectName).ToList();
         ApplyFilters();
