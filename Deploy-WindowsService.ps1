@@ -1,0 +1,191 @@
+#Requires -RunAsAdministrator
+
+<#
+.SYNOPSIS
+    Deploys Overview Dashboard as a Windows Service
+.DESCRIPTION
+    This script:
+    1. Adds Windows Service support to the project
+    2. Publishes the application
+    3. Installs and starts it as a Windows Service
+.PARAMETER TargetPath
+    Installation directory (default: C:\Services\OverviewDashboard)
+.PARAMETER ServiceName
+    Windows Service name (default: OverviewDashboard)
+.PARAMETER Port
+    HTTP port to listen on (default: 5000)
+.EXAMPLE
+    .\Deploy-WindowsService.ps1
+.EXAMPLE
+    .\Deploy-WindowsService.ps1 -TargetPath "D:\Apps\Dashboard" -Port 8080
+#>
+
+param(
+    [string]$TargetPath = "C:\Services\OverviewDashboard",
+    [string]$ServiceName = "OverviewDashboard",
+    [int]$Port = 5000
+)
+
+$ErrorActionPreference = "Stop"
+$projectPath = "$PSScriptRoot\OverviewDashboard"
+$csprojFile = "$projectPath\OverviewDashboard.csproj"
+$programFile = "$projectPath\Program.cs"
+
+Write-Host "=== Overview Dashboard - Windows Service Deployment ===" -ForegroundColor Cyan
+Write-Host ""
+
+# Step 1: Add Windows Service package
+Write-Host "[1/6] Adding Windows Service support..." -ForegroundColor Yellow
+$csprojContent = Get-Content $csprojFile -Raw
+
+if ($csprojContent -notmatch "Microsoft.Extensions.Hosting.WindowsServices") {
+    $packageReference = '  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.0" />
+  </ItemGroup>'
+    
+    $csprojContent = $csprojContent -replace '(</Project>)', "$packageReference`n`$1"
+    Set-Content -Path $csprojFile -Value $csprojContent -NoNewline
+    Write-Host "   [OK] Added Microsoft.Extensions.Hosting.WindowsServices package" -ForegroundColor Green
+}
+else {
+    Write-Host "   [OK] Windows Service package already present" -ForegroundColor Green
+}
+
+# Step 2: Update Program.cs
+Write-Host "[2/6] Updating Program.cs..." -ForegroundColor Yellow
+$programContent = Get-Content $programFile -Raw
+
+if ($programContent -notmatch "UseWindowsService") {
+    $programContent = $programContent -replace '(var builder = WebApplication\.CreateBuilder\(args\);)', "`$1`n`nbuilder.Host.UseWindowsService();"
+    Set-Content -Path $programFile -Value $programContent -NoNewline
+    Write-Host "   [OK] Added UseWindowsService() to Program.cs" -ForegroundColor Green
+}
+else {
+    Write-Host "   [OK] UseWindowsService() already present" -ForegroundColor Green
+}
+
+# Step 3: Stop existing service if running
+Write-Host "[3/6] Checking for existing service..." -ForegroundColor Yellow
+$existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($existingService) {
+    Write-Host "   [WARN] Service exists, stopping..." -ForegroundColor Yellow
+    Stop-Service -Name $ServiceName -Force
+    Start-Sleep -Seconds 3
+    Write-Host "   [OK] Service stopped" -ForegroundColor Green
+}
+else {
+    Write-Host "   [OK] No existing service found" -ForegroundColor Green
+}
+
+# Step 4: Publish application
+Write-Host "[4/6] Publishing application..." -ForegroundColor Yellow
+Write-Host "   Publishing to: $TargetPath" -ForegroundColor Gray
+
+# Create target directory if it doesn't exist
+if (!(Test-Path $TargetPath)) {
+    New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
+}
+
+# Publish as self-contained
+Push-Location $projectPath
+try {
+    dotnet publish -c Release -r win-x64 --self-contained true -o $TargetPath --nologo 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Publish failed with exit code $LASTEXITCODE"
+    }
+    Write-Host "   [OK] Application published successfully" -ForegroundColor Green
+}
+finally {
+    Pop-Location
+}
+
+# Step 5: Configure appsettings for service
+Write-Host "[5/6] Configuring application..." -ForegroundColor Yellow
+$appsettingsPath = "$TargetPath\appsettings.json"
+$appsettings = @{
+    Logging      = @{
+        LogLevel = @{
+            Default                = "Information"
+            "Microsoft.AspNetCore" = "Warning"
+        }
+    }
+    AllowedHosts = "*"
+    Kestrel      = @{
+        Endpoints = @{
+            Http = @{
+                Url = "http://0.0.0.0:$Port"
+            }
+        }
+    }
+} | ConvertTo-Json -Depth 10
+
+Set-Content -Path $appsettingsPath -Value $appsettings
+Write-Host "   [OK] Configured to listen on port $Port" -ForegroundColor Green
+
+# Step 6: Install and start service
+Write-Host "[6/6] Installing Windows Service..." -ForegroundColor Yellow
+
+if ($existingService) {
+    Write-Host "   Updating existing service..." -ForegroundColor Gray
+    sc.exe config $ServiceName binPath= "$TargetPath\OverviewDashboard.exe" | Out-Null
+}
+else {
+    Write-Host "   Creating new service..." -ForegroundColor Gray
+    New-Service -Name $ServiceName `
+        -BinaryPathName "$TargetPath\OverviewDashboard.exe" `
+        -DisplayName "Overview Dashboard Service" `
+        -Description "IT Infrastructure Overview Dashboard - Monitors system components and displays real-time status" `
+        -StartupType Automatic | Out-Null
+}
+
+# Configure service recovery
+sc.exe failure $ServiceName reset=86400 actions=restart/60000/restart/60000/restart/60000 | Out-Null
+
+# Configure firewall
+Write-Host "   Configuring firewall..." -ForegroundColor Gray
+$firewallRule = Get-NetFirewallRule -DisplayName "Overview Dashboard" -ErrorAction SilentlyContinue
+if (!$firewallRule) {
+    New-NetFirewallRule -DisplayName "Overview Dashboard" `
+        -Direction Inbound `
+        -Protocol TCP `
+        -LocalPort $Port `
+        -Action Allow | Out-Null
+    Write-Host "   [OK] Firewall rule created" -ForegroundColor Green
+}
+else {
+    Write-Host "   [OK] Firewall rule already exists" -ForegroundColor Green
+}
+
+# Start service
+Write-Host "   Starting service..." -ForegroundColor Gray
+Start-Service -Name $ServiceName
+Start-Sleep -Seconds 2
+
+# Verify service is running
+$service = Get-Service -Name $ServiceName
+if ($service.Status -eq 'Running') {
+    Write-Host "   [OK] Service started successfully" -ForegroundColor Green
+}
+else {
+    Write-Host "   [ERROR] Service failed to start (Status: $($service.Status))" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host ""
+Write-Host "=== Deployment Complete ===" -ForegroundColor Green
+Write-Host ""
+Write-Host "Service Details:" -ForegroundColor Cyan
+Write-Host "  Name:        $ServiceName"
+Write-Host "  Status:      $($service.Status)"
+Write-Host "  Start Type:  $($service.StartType)"
+Write-Host "  Location:    $TargetPath"
+Write-Host "  URL:         http://localhost:$Port"
+Write-Host ""
+Write-Host "Management Commands:" -ForegroundColor Cyan
+Write-Host "  Stop:        Stop-Service -Name $ServiceName"
+Write-Host "  Start:       Start-Service -Name $ServiceName"
+Write-Host "  Restart:     Restart-Service -Name $ServiceName"
+Write-Host "  Status:      Get-Service -Name $ServiceName"
+Write-Host "  Uninstall:   sc.exe delete $ServiceName"
+Write-Host ""
+Write-Host "Access the dashboard at: http://localhost:$Port" -ForegroundColor Green
