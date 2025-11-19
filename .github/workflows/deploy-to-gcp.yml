@@ -1,0 +1,82 @@
+name: Build and Deploy to GCP
+
+on:
+  push:
+    branches:
+      - main  # Change this to your preferred branch
+  workflow_dispatch:  # Allows manual triggering
+
+env:
+  IMAGE_NAME: overview-dashboard
+  CONTAINER_NAME: overview-dashboard
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
+
+      - name: Save Docker image
+        run: docker save ${{ env.IMAGE_NAME }}:latest -o image.tar
+
+      - name: Copy image to GCP instance
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          source: "image.tar"
+          target: "/tmp/"
+
+      - name: Deploy to GCP instance
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          script: |
+            # Load the Docker image
+            docker load -i /tmp/image.tar
+            
+            # Stop and remove existing container if it exists
+            docker stop ${{ env.CONTAINER_NAME }} 2>/dev/null || true
+            docker rm ${{ env.CONTAINER_NAME }} 2>/dev/null || true
+            
+            # Run the new container
+            docker run -d \
+              --name ${{ env.CONTAINER_NAME }} \
+              --restart unless-stopped \
+              -p 80:8080 \
+              -p 443:8081 \
+              -v /var/overview-dashboard/data:/app/Database \
+              ${{ env.IMAGE_NAME }}:latest
+            
+            # Clean up
+            rm /tmp/image.tar
+            
+            # Remove old images (keep last 3)
+            docker image prune -af --filter "until=72h"
+            
+            # Show running containers
+            docker ps -a | grep ${{ env.CONTAINER_NAME }}
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          script: |
+            echo "Checking container health..."
+            sleep 5
+            docker logs --tail 50 ${{ env.CONTAINER_NAME }}
