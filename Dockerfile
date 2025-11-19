@@ -24,6 +24,9 @@ EXPOSE 8081
 # Copy published app
 COPY --from=publish /app/publish .
 
+# Create Database directory for SQLite
+RUN mkdir -p /app/Database
+
 # Copy database if it exists (optional - you might want to use a volume instead)
 # COPY Database/ /app/Database/
 
