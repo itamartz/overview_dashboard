@@ -1,13 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OverviewDashboard.Data;
-using OverviewDashboard.DTOs;
 using OverviewDashboard.Models;
+using System.Text.Json;
 
 namespace OverviewDashboard.Controllers
 {
     /// <summary>
-    /// API Controller for managing monitoring components in the IT infrastructure dashboard
+    /// API Controller for managing monitoring components with dynamic payloads
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
@@ -24,36 +24,22 @@ namespace OverviewDashboard.Controllers
         }
 
         /// <summary>
-        /// Get all components with their related project and system information
+        /// Get all components
         /// </summary>
         /// <returns>A list of all components</returns>
-        /// <response code="200">Returns the list of components</response>
         [HttpGet]
-        [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<ActionResult<IEnumerable<Component>>> GetAll()
         {
-            return await _context.Components
-                .Include(c => c.Project)
-                .ThenInclude(p => p!.System)
-                .ToListAsync();
+            return await _context.Components.ToListAsync();
         }
 
         /// <summary>
         /// Get a specific component by ID
         /// </summary>
-        /// <param name="id">The component ID</param>
-        /// <returns>The requested component</returns>
-        /// <response code="200">Returns the component</response>
-        /// <response code="404">If the component is not found</response>
         [HttpGet("{id}")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<Component>> GetById(int id)
         {
-            var component = await _context.Components
-                .Include(c => c.Project)
-                .ThenInclude(p => p!.System)
-                .FirstOrDefaultAsync(c => c.Id == id);
+            var component = await _context.Components.FindAsync(id);
 
             if (component == null)
             {
@@ -64,163 +50,96 @@ namespace OverviewDashboard.Controllers
         }
 
         /// <summary>
-        /// Create or update a component
+        /// Create a new component entry
         /// </summary>
-        /// <param name="dto">Component data including system and project names</param>
-        /// <returns>The created or updated component</returns>
-        /// <remarks>
-        /// Sample requests for each severity level:
-        ///
-        /// Example 1 - "ok" severity (green status):
-        ///
-        ///     POST /api/components
-        ///     {
-        ///        "name": "Database Server",
-        ///        "severity": "ok",
-        ///        "value": 98.5,
-        ///        "metric": "Uptime %",
-        ///        "description": "Primary database server running smoothly",
-        ///        "projectName": "Backend Services",
-        ///        "systemName": "Production Environment"
-        ///     }
-        ///
-        /// Example 2 - "warning" severity (yellow/orange status):
-        ///
-        ///     POST /api/components
-        ///     {
-        ///        "name": "API Gateway",
-        ///        "severity": "warning",
-        ///        "value": 85.2,
-        ///        "metric": "CPU Usage %",
-        ///        "description": "CPU usage is approaching threshold",
-        ///        "projectName": "Backend Services",
-        ///        "systemName": "Production Environment"
-        ///     }
-        ///
-        /// Example 3 - "error" severity (red status):
-        ///
-        ///     POST /api/components
-        ///     {
-        ///        "name": "Payment Service",
-        ///        "severity": "error",
-        ///        "value": 0,
-        ///        "metric": "Status",
-        ///        "description": "Service is down and not responding",
-        ///        "projectName": "Backend Services",
-        ///        "systemName": "Production Environment"
-        ///     }
-        ///
-        /// Example 4 - "info" severity (blue status):
-        ///
-        ///     POST /api/components
-        ///     {
-        ///        "name": "Deployment Pipeline",
-        ///        "severity": "info",
-        ///        "value": 1,
-        ///        "metric": "Active Deployments",
-        ///        "description": "Deployment in progress to staging environment",
-        ///        "projectName": "DevOps",
-        ///        "systemName": "CI/CD"
-        ///     }
-        ///
-        /// If a component with the same name exists in the specified project, it will be updated.
-        /// If the system or project doesn't exist, they will be automatically created.
-        ///
-        /// Valid severity values: ok, warning, error, info
-        /// </remarks>
-        /// <response code="200">Component updated successfully</response>
-        /// <response code="201">Component created successfully</response>
-        /// <response code="500">Internal server error</response>
+        /// <param name="request">The component data</param>
+        /// <returns>The created component</returns>
         [HttpPost]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<Component>> Create([FromBody] ComponentDto dto)
+        public async Task<ActionResult<Component>> Create([FromBody] JsonElement request)
         {
             try
             {
-                // Find or create System
-                var system = await _context.Systems
-                    .FirstOrDefaultAsync(s => s.Name == dto.SystemName);
-
-                if (system == null)
+                // Extract required fields
+                if (!request.TryGetProperty("systemName", out var systemNameProp) ||
+                    !request.TryGetProperty("projectName", out var projectNameProp) ||
+                    !request.TryGetProperty("payload", out var payloadProp))
                 {
-                    system = new SystemEntity
-                    {
-                        Name = dto.SystemName,
-                        Type = "environment"
-                    };
-                    _context.Systems.Add(system);
-                    await _context.SaveChangesAsync();
+                    return BadRequest("Missing required fields: systemName, projectName, payload");
                 }
 
-                // Find or create Project
-                var project = await _context.Projects
-                    .FirstOrDefaultAsync(p => p.Name == dto.ProjectName && p.SystemId == system.Id);
-
-                if (project == null)
+                var systemName = systemNameProp.GetString();
+                var projectName = projectNameProp.GetString();
+                
+                if (string.IsNullOrEmpty(systemName) || string.IsNullOrEmpty(projectName))
                 {
-                    project = new Project
-                    {
-                        Name = dto.ProjectName,
-                        SystemId = system.Id
-                    };
-                    _context.Projects.Add(project);
-                    await _context.SaveChangesAsync();
+                    return BadRequest("systemName and projectName cannot be empty");
                 }
 
-                // Create or update Component
-                var existingComponent = await _context.Components
-                    .FirstOrDefaultAsync(c => c.Name == dto.Name && c.ProjectId == project.Id);
+                // Check for "Id" in the payload for Upsert logic
+                string? payloadId = null;
+                if (payloadProp.ValueKind == JsonValueKind.Object && payloadProp.TryGetProperty("Id", out var idProp))
+                {
+                    payloadId = idProp.ToString();
+                }
+
+                Component? existingComponent = null;
+
+                if (!string.IsNullOrEmpty(payloadId))
+                {
+                    // Find existing component with same System, Project, and Payload.Id
+                    // Since Payload is a string, we have to fetch candidates and parse
+                    var candidates = await _context.Components
+                        .Where(c => c.SystemName == systemName && c.ProjectName == projectName)
+                        .ToListAsync();
+
+                    foreach (var c in candidates)
+                    {
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(c.Payload);
+                            if (doc.RootElement.TryGetProperty("Id", out var existingIdProp) && 
+                                existingIdProp.ToString() == payloadId)
+                            {
+                                existingComponent = c;
+                                break;
+                            }
+                        }
+                        catch
+                        {
+                            // Ignore parsing errors for existing data
+                        }
+                    }
+                }
 
                 if (existingComponent != null)
                 {
-                    // Update existing component
-                    existingComponent.Severity = dto.Severity;
-                    existingComponent.Value = dto.Value;
-                    existingComponent.Metric = dto.Metric;
-                    existingComponent.Description = dto.Description;
-                    existingComponent.LastUpdate = DateTime.UtcNow;
+                    // Update existing
+                    existingComponent.Payload = payloadProp.ToString();
+                    existingComponent.CreatedAt = DateTime.UtcNow; // Update timestamp
+                    
+                    _context.Components.Update(existingComponent);
                     await _context.SaveChangesAsync();
-
-                    _logger.LogInformation("Updated component: {Name}", dto.Name);
-
-                    return Ok(new
-                    {
-                        message = "Component updated successfully",
-                        id = existingComponent.Id,
-                        name = existingComponent.Name,
-                        severity = existingComponent.Severity
-                    });
+                    
+                    _logger.LogInformation("Updated component {Id} for System: {System}, Project: {Project}", payloadId, systemName, projectName);
+                    return Ok(existingComponent);
                 }
                 else
                 {
                     // Create new component
                     var component = new Component
                     {
-                        Name = dto.Name,
-                        Severity = dto.Severity,
-                        Value = dto.Value,
-                        Metric = dto.Metric,
-                        Description = dto.Description,
-                        ProjectId = project.Id,
-                        LastUpdate = DateTime.UtcNow
+                        SystemName = systemName,
+                        ProjectName = projectName,
+                        Payload = payloadProp.ToString(), // Store payload as JSON string
+                        CreatedAt = DateTime.UtcNow
                     };
 
                     _context.Components.Add(component);
                     await _context.SaveChangesAsync();
 
-                    _logger.LogInformation("Created component: {Name}", dto.Name);
+                    _logger.LogInformation("Created component for System: {System}, Project: {Project}", systemName, projectName);
 
-                    return CreatedAtAction(nameof(GetById), new { id = component.Id }, new
-                    {
-                        message = "Component created successfully",
-                        id = component.Id,
-                        name = component.Name,
-                        severity = component.Severity,
-                        projectName = dto.ProjectName,
-                        systemName = dto.SystemName
-                    });
+                    return CreatedAtAction(nameof(GetById), new { id = component.Id }, component);
                 }
             }
             catch (Exception ex)
@@ -233,13 +152,7 @@ namespace OverviewDashboard.Controllers
         /// <summary>
         /// Delete a component by ID
         /// </summary>
-        /// <param name="id">The component ID to delete</param>
-        /// <returns>No content</returns>
-        /// <response code="204">Component successfully deleted</response>
-        /// <response code="404">Component not found</response>
         [HttpDelete("{id}")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Delete(int id)
         {
             var component = await _context.Components.FindAsync(id);
@@ -251,33 +164,7 @@ namespace OverviewDashboard.Controllers
             _context.Components.Remove(component);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Deleted component: {Name} (ID: {Id})", component.Name, id);
             return NoContent();
-        }
-
-        /// <summary>
-        /// Get complete hierarchical dashboard data (Systems > Projects > Components)
-        /// </summary>
-        /// <returns>All systems with their nested projects and components</returns>
-        /// <remarks>
-        /// Returns the entire hierarchical structure of the dashboard data:
-        /// - Systems (top level)
-        ///   - Projects (nested under systems)
-        ///     - Components (nested under projects)
-        ///
-        /// This endpoint is useful for loading the complete dashboard structure in one request.
-        /// </remarks>
-        /// <response code="200">Returns the complete hierarchical data</response>
-        [HttpGet("dashboard")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<ActionResult<object>> GetDashboardData()
-        {
-            var systems = await _context.Systems
-                .Include(s => s.Projects)
-                .ThenInclude(p => p.Components)
-                .ToListAsync();
-
-            return Ok(systems);
         }
     }
 }

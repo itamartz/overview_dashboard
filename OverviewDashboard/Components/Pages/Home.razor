@@ -2,6 +2,7 @@
 @using Microsoft.EntityFrameworkCore
 @using OverviewDashboard.Data
 @using OverviewDashboard.Models
+@using System.Text.Json
 @inject IServiceScopeFactory ScopeFactory
 @rendermode InteractiveServer
 @implements IAsyncDisposable
@@ -16,36 +17,56 @@
             <div class="timestamp">@DateTime.Now.ToString("T")</div>
         </div>
 
-        @* <div class="nav-search">
-            <input type="text" placeholder="Search systems..." @bind="searchTerm" @bind:event="oninput" />
-        </div> *@
-
         <div class="nav-content">
-            @foreach (var system in filteredSystems)
+            @{
+                var systemGroups = components.GroupBy(c => c.SystemName).OrderBy(g => g.Key);
+            }
+            @foreach (var systemGroup in systemGroups)
             {
-                var counts = CalculateSystemSeverity(system);
-                var worstSeverity = GetWorstSeverity(counts);
+                var systemName = systemGroup.Key;
+                var systemSeverity = GetWorstSeverity(systemGroup.ToList());
+                var isSystemSelected = selectedSystem == systemName;
+                var errorCount = systemGroup.Count(c => GetSeverity(c) == "error");
+                var warningCount = systemGroup.Count(c => GetSeverity(c) == "warning");
 
-                <div class="nav-item @(selectedSystemId == system.Id ? "active" : "")">
-                    <span class="nav-item-name" @onclick="() => SelectSystem(system.Id)">@system.Name</span>
+                <div class="nav-item @(isSystemSelected ? "active" : "")">
+                    <span class="nav-item-name" @onclick="() => SelectSystem(systemName)">@systemName</span>
                     <div style="display: flex; gap: 5px; align-items: center;">
-                        <span class="nav-item-badge badge-@worstSeverity">@counts[worstSeverity]</span>
-                        <button class="delete-btn-small" @onclick="() => DeleteSystem(system.Id)" @onclick:stopPropagation="true">🗑️</button>
+                        @if (errorCount > 0)
+                        {
+                            <span class="nav-item-badge badge-error">@errorCount</span>
+                        }
+                        @if (warningCount > 0)
+                        {
+                            <span class="nav-item-badge badge-warning">@warningCount</span>
+                        }
                     </div>
                 </div>
 
-                @foreach (var project in system.Projects)
+                @if (isSystemSelected)
                 {
-                    var projectCounts = CalculateProjectSeverity(project);
-                    var projectWorst = GetWorstSeverity(projectCounts);
+                    @foreach (var projectGroup in systemGroup.GroupBy(c => c.ProjectName).OrderBy(g => g.Key))
+                    {
+                        var projectName = projectGroup.Key;
+                        var projectSeverity = GetWorstSeverity(projectGroup.ToList());
+                        var isProjectSelected = selectedProject == projectName;
+                        var projectErrorCount = projectGroup.Count(c => GetSeverity(c) == "error");
+                        var projectWarningCount = projectGroup.Count(c => GetSeverity(c) == "warning");
 
-                    <div class="nav-subitem @(selectedProjectId == project.Id ? "active" : "")">
-                        <span @onclick="() => SelectProject(system.Id, project.Id)">@project.Name</span>
-                        <div style="display: flex; gap: 5px; align-items: center;">
-                            <span class="nav-item-badge badge-@projectWorst">@projectCounts[projectWorst]</span>
-                            <button class="delete-btn-small" @onclick="() => DeleteProject(project.Id)" @onclick:stopPropagation="true">🗑️</button>
+                        <div class="nav-subitem @(isProjectSelected ? "active" : "")">
+                            <span @onclick="() => SelectProject(systemName, projectName)">@projectName</span>
+                            <div style="display: flex; gap: 5px; align-items: center;">
+                                @if (projectErrorCount > 0)
+                                {
+                                    <span class="nav-item-badge badge-error">@projectErrorCount</span>
+                                }
+                                @if (projectWarningCount > 0)
+                                {
+                                    <span class="nav-item-badge badge-warning">@projectWarningCount</span>
+                                }
+                            </div>
                         </div>
-                    </div>
+                    }
                 }
             }
         </div>
@@ -58,75 +79,134 @@
             <p>@contentSubtitle</p>
         </div>
 
-        @if (currentComponents != null && currentComponents.Any())
+        @if (contextComponents != null && contextComponents.Any())
         {
             <!-- Summary Cards -->
             <div class="cards-container">
                 @{
                     var counts = new Dictionary<string, int> { { "ok", 0 }, { "warning", 0 }, { "error", 0 }, { "info", 0 } };
-                    foreach (var c in currentComponents)
+                    foreach (var c in contextComponents)
                     {
-                        if (counts.ContainsKey(c.Severity.ToLower()))
-                            counts[c.Severity.ToLower()]++;
+                        var severity = GetSeverity(c);
+                        if (counts.ContainsKey(severity)) counts[severity]++;
                     }
                 }
 
-                <div class="summary-card card-ok @(activeFilter == "ok" ? "active" : "")" @onclick='() => FilterBySeverity("ok")'>
+                <div class="summary-card card-ok @(activeFilter == "ok" ? "active-filter" : "")" @onclick='() => FilterBySeverity("ok")'>
                     <div class="card-icon-bg">✓</div>
                     <div class="card-label">OK</div>
                     <div class="card-value">@counts["ok"]</div>
-                    <div class="card-subtitle">Healthy components</div>
                 </div>
 
-                <div class="summary-card card-warning @(activeFilter == "warning" ? "active" : "")" @onclick='() => FilterBySeverity("warning")'>
+                <div class="summary-card card-warning @(activeFilter == "warning" ? "active-filter" : "")" @onclick='() => FilterBySeverity("warning")'>
                     <div class="card-icon-bg">⚠</div>
                     <div class="card-label">Warning</div>
                     <div class="card-value">@counts["warning"]</div>
-                    <div class="card-subtitle">Needs attention</div>
                 </div>
 
-                <div class="summary-card card-error @(activeFilter == "error" ? "active" : "")" @onclick='() => FilterBySeverity("error")'>
+                <div class="summary-card card-error @(activeFilter == "error" ? "active-filter" : "")" @onclick='() => FilterBySeverity("error")'>
                     <div class="card-icon-bg">✕</div>
                     <div class="card-label">Error</div>
                     <div class="card-value">@counts["error"]</div>
-                    <div class="card-subtitle">Critical issues</div>
                 </div>
 
-                <div class="summary-card card-info @(activeFilter == "info" ? "active" : "")" @onclick='() => FilterBySeverity("info")'>
+                <div class="summary-card card-info @(activeFilter == "info" ? "active-filter" : "")" @onclick='() => FilterBySeverity("info")'>
                     <div class="card-icon-bg">ℹ</div>
                     <div class="card-label">Info</div>
                     <div class="card-value">@counts["info"]</div>
-                    <div class="card-subtitle">Informational</div>
                 </div>
             </div>
 
-            <!-- Data Table -->
+            <style>
+                .summary-card {
+                    cursor: pointer;
+                    transition: transform 0.2s, box-shadow 0.2s;
+                }
+                .summary-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+                }
+                .active-filter {
+                    border: 3px solid white;
+                    transform: scale(1.05);
+                }
+                .card-ok.active-filter { box-shadow: 0 0 15px rgba(40, 167, 69, 0.6); }
+                .card-warning.active-filter { box-shadow: 0 0 15px rgba(255, 193, 7, 0.6); }
+                .card-error.active-filter { box-shadow: 0 0 15px rgba(220, 53, 69, 0.6); }
+                .card-info.active-filter { box-shadow: 0 0 15px rgba(23, 162, 184, 0.6); }
+
+                .search-box {
+                    padding: 8px 12px;
+                    border: 1px solid #dfe6e9;
+                    border-radius: 5px;
+                    width: 250px;
+                    font-size: 14px;
+                    outline: none;
+                    transition: border-color 0.3s;
+                }
+                .search-box:focus {
+                    border-color: #3498db;
+                }
+
+                .btn-clear {
+                    padding: 10px 20px;
+                    background: #95a5a6;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    transition: all 0.3s;
+                    margin-top: 10px;
+                }
+                .btn-clear:hover {
+                    background: #7f8c8d;
+                }
+            </style>
+
+            <!-- Dynamic Data Table -->
             <div class="table-container">
-                <div class="table-header">
+                <div class="table-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <h3>@filteredComponents.Count Components</h3>
+                    <input type="text" class="search-box" placeholder="Search..." @bind="searchText" @bind:event="oninput" />
                 </div>
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Component</th>
-                            <th>Severity</th>
-                            <th>Value</th>
-                            <th>Metric</th>
-                            <th>Description</th>
-                            <th>Last Updated</th>
+                            <th @onclick='() => SortBy("CreatedAt")' style="cursor: pointer;">
+                                Created At @GetSortIndicator("CreatedAt")
+                            </th>
+                            @foreach (var header in GetDynamicHeaders())
+                            {
+                                <th @onclick="() => SortBy(header)" style="cursor: pointer;">
+                                    @header @GetSortIndicator(header)
+                                </th>
+                            }
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var component in filteredComponents)
                         {
+                            var payload = ParsePayload(component.Payload);
                             <tr>
-                                <td><strong>@component.Name</strong></td>
-                                <td><span class="severity-badge severity-@component.Severity.ToLower()">@component.Severity.ToUpper()</span></td>
-                                <td><strong>@component.Value</strong></td>
-                                <td><span class="metric-badge">@component.Metric</span></td>
-                                <td>@component.Description</td>
-                                <td class="timestamp-cell">@GetRelativeTime(component.LastUpdate)</td>
+                                <td class="timestamp-cell">@GetRelativeTime(component.CreatedAt)</td>
+                                @foreach (var header in GetDynamicHeaders())
+                                {
+                                    <td>
+                                        @if (payload.TryGetValue(header, out var value))
+                                        {
+                                            @if (header.Equals("Severity", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="severity-badge severity-@value.ToString()?.ToLower()">@value</span>
+                                            }
+                                            else
+                                            {
+                                                @value
+                                            }
+                                        }
+                                    </td>
+                                }
                                 <td>
                                     <button class="delete-btn" @onclick="() => DeleteComponent(component.Id)">🗑️</button>
                                 </td>
@@ -138,39 +218,52 @@
         }
         else
         {
-            <p>Select a system or project from the left navigation to view components.</p>
+            <div style="padding: 2rem; text-align: center; color: #666;">
+                @if (components.Any())
+                {
+                    <p>Select a system or project from the left navigation to view components.</p>
+                }
+                else
+                {
+                    <p>No components found. Waiting for data...</p>
+                }
+            </div>
         }
     </div>
 </div>
 
 @code {
-    private List<SystemEntity> systems = new();
-    private List<SystemEntity> filteredSystems = new();
-    private List<Component> currentComponents = new();
+    private List<Component> components = new();
+    private List<Component> contextComponents = new();
     private List<Component> filteredComponents = new();
+    
+    private string? selectedSystem;
+    private string? selectedProject;
+    private string? activeFilter;
+    
+    private string contentTitle = "System Overview";
+    private string contentSubtitle = "Select a system to view details";
+    
+    private System.Threading.Timer? _timer;
 
-    private int? selectedSystemId;
-    private int? selectedProjectId;
-    private string _searchTerm = string.Empty;
-    private string activeFilter = string.Empty;
-    private string searchTerm
+    private string? _sortColumn;
+    private bool _sortAscending = true;
+
+    private string _searchText = "";
+    private string searchText
     {
-        get => _searchTerm;
+        get => _searchText;
         set
         {
-            _searchTerm = value;
-            FilterNavigation();
+            _searchText = value;
+            ApplyFilters();
         }
     }
-    private string contentTitle = "Select a System";
-    private string contentSubtitle = "Choose a system or project from the left navigation";
-    private System.Threading.Timer? _timer;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
 
-        // Setup auto-refresh timer (every 5 seconds)
         _timer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
@@ -193,87 +286,134 @@
     {
         using var scope = ScopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-
-        systems = await dbContext.Systems
-            .Include(s => s.Projects)
-            .ThenInclude(p => p.Components)
-            .ToListAsync();
-        filteredSystems = systems;
-    }
-
-    private void FilterNavigation()
-    {
-        if (string.IsNullOrWhiteSpace(_searchTerm))
+        components = await dbContext.Components.ToListAsync();
+        
+        if (selectedProject != null && selectedSystem != null)
         {
-            filteredSystems = systems;
+            SelectProject(selectedSystem, selectedProject);
         }
-        else
+        else if (selectedSystem != null)
         {
-            filteredSystems = systems.Where(s =>
-                s.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                s.Projects.Any(p => p.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase))
-            ).ToList();
-        }
-        StateHasChanged();
-    }
-
-    private void SelectSystem(int systemId)
-    {
-        selectedSystemId = systemId;
-        selectedProjectId = null;
-        activeFilter = string.Empty;
-        var system = systems.FirstOrDefault(s => s.Id == systemId);
-        if (system != null)
-        {
-            contentTitle = system.Name;
-            contentSubtitle = "All Projects";
-            currentComponents = system.Projects.SelectMany(p => p.Components).ToList();
-            filteredComponents = currentComponents;
-        }
-    }
-
-    private void SelectProject(int systemId, int projectId)
-    {
-        selectedSystemId = systemId;
-        selectedProjectId = projectId;
-        activeFilter = string.Empty;
-        var system = systems.FirstOrDefault(s => s.Id == systemId);
-        var project = system?.Projects.FirstOrDefault(p => p.Id == projectId);
-        if (project != null)
-        {
-            contentTitle = $"{system!.Name} - {project.Name}";
-            contentSubtitle = project.Name;
-            currentComponents = project.Components.ToList();
-            filteredComponents = currentComponents;
-        }
-    }
-
-    private void FilterBySeverity(string severity)
-    {
-        // Toggle filter if clicking the same card again
-        if (activeFilter == severity)
-        {
-            activeFilter = string.Empty;
-            filteredComponents = currentComponents;
-        }
-        else
-        {
-            activeFilter = severity;
-            filteredComponents = currentComponents.Where(c => c.Severity.Equals(severity, StringComparison.OrdinalIgnoreCase)).ToList();
+            SelectSystem(selectedSystem);
         }
     }
 
     private async Task RefreshData()
     {
         await LoadData();
-        if (selectedProjectId.HasValue)
+    }
+
+    private void SelectSystem(string systemName)
+    {
+        selectedSystem = systemName;
+        selectedProject = null;
+        contentTitle = systemName;
+        contentSubtitle = "All Projects";
+        
+        contextComponents = components.Where(c => c.SystemName == systemName).ToList();
+        ApplyFilters();
+    }
+
+    private void SelectProject(string systemName, string projectName)
+    {
+        selectedSystem = systemName;
+        selectedProject = projectName;
+        contentTitle = $"{systemName} - {projectName}";
+        contentSubtitle = "Project Details";
+        
+        contextComponents = components.Where(c => c.SystemName == systemName && c.ProjectName == projectName).ToList();
+        ApplyFilters();
+    }
+
+    private void FilterBySeverity(string severity)
+    {
+        if (activeFilter == severity)
+            activeFilter = null;
+        else
+            activeFilter = severity;
+            
+        ApplyFilters();
+    }
+
+    private void ClearFilter()
+    {
+        activeFilter = null;
+        _searchText = "";
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        var query = contextComponents.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(activeFilter))
         {
-            SelectProject(selectedSystemId!.Value, selectedProjectId.Value);
+            query = query.Where(c => GetSeverity(c).Equals(activeFilter, StringComparison.OrdinalIgnoreCase));
         }
-        else if (selectedSystemId.HasValue)
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
         {
-            SelectSystem(selectedSystemId.Value);
+            var term = _searchText.Trim();
+            query = query.Where(c => 
+                c.Payload.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                GetRelativeTime(c.CreatedAt).Contains(term, StringComparison.OrdinalIgnoreCase)
+            );
         }
+
+        filteredComponents = query.ToList();
+        
+        // Apply sorting if a column is selected
+        if (!string.IsNullOrEmpty(_sortColumn))
+        {
+            filteredComponents = SortComponents(filteredComponents, _sortColumn, _sortAscending);
+        }
+    }
+
+    private void SortBy(string column)
+    {
+        if (_sortColumn == column)
+        {
+            // Toggle sort direction if same column
+            _sortAscending = !_sortAscending;
+        }
+        else
+        {
+            // New column, default to ascending
+            _sortColumn = column;
+            _sortAscending = true;
+        }
+        
+        ApplyFilters(); // Re-apply filters with new sort
+    }
+
+    private string GetSortIndicator(string column)
+    {
+        if (_sortColumn != column) return "";
+        return _sortAscending ? " ▲" : " ▼";
+    }
+
+    private List<Component> SortComponents(List<Component> components, string column, bool ascending)
+    {
+        if (column == "CreatedAt")
+        {
+            return ascending 
+                ? components.OrderBy(c => c.CreatedAt).ToList()
+                : components.OrderByDescending(c => c.CreatedAt).ToList();
+        }
+        
+        // Sort by payload field
+        var sorted = components.Select(c => new
+        {
+            Component = c,
+            Payload = ParsePayload(c.Payload),
+            SortValue = ParsePayload(c.Payload).TryGetValue(column, out var val) ? val.ToString() : ""
+        });
+
+        sorted = ascending
+            ? sorted.OrderBy(x => x.SortValue)
+            : sorted.OrderByDescending(x => x.SortValue);
+
+        return sorted.Select(x => x.Component).ToList();
     }
 
     private async Task DeleteComponent(int id)
@@ -290,96 +430,64 @@
         }
     }
 
-    private async Task DeleteSystem(int id)
+    private Dictionary<string, object> ParsePayload(string json)
     {
-        using var scope = ScopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-
-        var system = await dbContext.Systems
-            .Include(s => s.Projects)
-            .ThenInclude(p => p.Components)
-            .FirstOrDefaultAsync(s => s.Id == id);
-
-        if (system != null)
+        try
         {
-            dbContext.Systems.Remove(system);
-            await dbContext.SaveChangesAsync();
-
-            // Clear selection if deleted system was selected
-            if (selectedSystemId == id)
-            {
-                selectedSystemId = null;
-                selectedProjectId = null;
-                currentComponents = new();
-                filteredComponents = new();
-                contentTitle = "Select a System";
-                contentSubtitle = "Choose a system or project from the left navigation";
-            }
-
-            await RefreshData();
+            return JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new Dictionary<string, object>();
+        }
+        catch
+        {
+            return new Dictionary<string, object>();
         }
     }
 
-    private async Task DeleteProject(int id)
+    private List<string> GetDynamicHeaders()
     {
-        using var scope = ScopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+        if (contextComponents == null || !contextComponents.Any()) return new List<string>();
 
-        var project = await dbContext.Projects
-            .Include(p => p.Components)
-            .FirstOrDefaultAsync(p => p.Id == id);
-
-        if (project != null)
+        var headers = new HashSet<string>();
+        foreach (var component in contextComponents)
         {
-            dbContext.Projects.Remove(project);
-            await dbContext.SaveChangesAsync();
-
-            // Clear selection if deleted project was selected
-            if (selectedProjectId == id)
+            var payload = ParsePayload(component.Payload);
+            foreach (var key in payload.Keys)
             {
-                selectedProjectId = null;
-                if (selectedSystemId.HasValue)
-                {
-                    SelectSystem(selectedSystemId.Value);
-                }
-            }
-
-            await RefreshData();
-        }
-    }
-
-    private Dictionary<string, int> CalculateSystemSeverity(SystemEntity system)
-    {
-        var counts = new Dictionary<string, int> { { "ok", 0 }, { "warning", 0 }, { "error", 0 }, { "info", 0 } };
-        foreach (var project in system.Projects)
-        {
-            foreach (var component in project.Components)
-            {
-                var severity = component.Severity.ToLower();
-                if (counts.ContainsKey(severity))
-                    counts[severity]++;
+                headers.Add(key);
             }
         }
-        return counts;
-    }
-
-    private Dictionary<string, int> CalculateProjectSeverity(Project project)
-    {
-        var counts = new Dictionary<string, int> { { "ok", 0 }, { "warning", 0 }, { "error", 0 }, { "info", 0 } };
-        foreach (var component in project.Components)
+        
+        var headerList = headers.OrderBy(h => h).ToList();
+        if (headerList.Contains("Severity"))
         {
-            var severity = component.Severity.ToLower();
-            if (counts.ContainsKey(severity))
-                counts[severity]++;
+            headerList.Remove("Severity");
+            headerList.Insert(0, "Severity");
         }
-        return counts;
+        
+        // Hide Id column as requested
+        if (headerList.Contains("Id"))
+        {
+            headerList.Remove("Id");
+        }
+        
+        return headerList;
     }
 
-    private string GetWorstSeverity(Dictionary<string, int> counts)
+    private string GetSeverity(Component component)
     {
-        if (counts["error"] > 0) return "error";
-        if (counts["warning"] > 0) return "warning";
-        if (counts["info"] > 0) return "info";
+        var payload = ParsePayload(component.Payload);
+        if (payload.TryGetValue("Severity", out var severity))
+        {
+            return severity.ToString()?.ToLower() ?? "info";
+        }
+        return "info";
+    }
+
+    private string GetWorstSeverity(List<Component> components)
+    {
+        var severities = components.Select(GetSeverity).ToList();
+        if (severities.Contains("error")) return "error";
+        if (severities.Contains("warning")) return "warning";
+        if (severities.Contains("info")) return "info";
         return "ok";
     }
 

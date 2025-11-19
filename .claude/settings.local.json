@@ -16,7 +16,9 @@
       "Bash(taskkill:*)",
       "Bash(nul)",
       "Bash(exit 0)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)"
     ],
     "deny": [],
     "ask": []
