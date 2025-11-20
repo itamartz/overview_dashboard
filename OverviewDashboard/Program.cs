@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using OverviewDashboard.Components;
 using OverviewDashboard.Data;
+using OverviewDashboard.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,6 +47,21 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
     db.Database.EnsureCreated();
+    
+    // Create default Welcome event if database is empty
+    if (!db.Components.Any())
+    {
+        var welcomeComponent = new Component
+        {
+            SystemName = "Welcome",
+            ProjectName = "demo",
+            Payload = "{\"Severity\": \"info\", \"Description\": \"you can add data with the API\"}",
+            CreatedAt = DateTime.UtcNow
+        };
+        
+        db.Components.Add(welcomeComponent);
+        db.SaveChanges();
+    }
 }
 
 // Configure the HTTP request pipeline.
