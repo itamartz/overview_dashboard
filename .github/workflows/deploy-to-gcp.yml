@@ -35,10 +35,14 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
+      - name: Resolve IP
+        run: |
+          echo "GCP_IP=$(dig +short ${{ secrets.GCP_HOST }} | tail -n1)" >> $GITHUB_ENV
+
       - name: Deploy to GCP instance
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.GCP_HOST }}
+          host: ${{ env.GCP_IP }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           script: |
@@ -79,7 +83,7 @@ jobs:
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.GCP_HOST }}
+          host: ${{ env.GCP_IP }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           script: |
