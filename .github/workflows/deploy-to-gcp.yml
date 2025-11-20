@@ -1,18 +1,4 @@
-name: Build and Deploy to GCP
 
-on:
-  push:
-    branches:
-      - main  # Change this to your preferred branch
-  workflow_dispatch:  # Allows manual triggering
-
-env:
-  IMAGE_NAME: devopsteamsdb/devopsteamsdb
-  IMAGE_TAG: overviewdashboard
-  CONTAINER_NAME: overview-dashboard
-
-jobs:
-  build-and-deploy:
 name: Build and Deploy to GCP
 
 on:
