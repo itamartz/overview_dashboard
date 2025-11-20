@@ -479,18 +479,24 @@
             }
         }
         
+        // Step 1: Sort all headers alphabetically
         var headerList = headers.OrderBy(h => h).ToList();
-        if (headerList.Contains("Severity"))
-        {
-            headerList.Remove("Severity");
-            headerList.Insert(0, "Severity");
-        }
         
-        // Hide Id column as requested
-        if (headerList.Contains("Id"))
-        {
-            headerList.Remove("Id");
-        }
+        // Step 2: Hide Id column
+        if (headerList.Contains("Id")) headerList.Remove("Id");
+
+        // Step 3: Prioritize specific columns (Severity, name)
+        // We want the order: Severity, name, [others...]
+        
+        var nameHeader = headerList.FirstOrDefault(h => h.Equals("name", StringComparison.OrdinalIgnoreCase));
+        var severityHeader = headerList.FirstOrDefault(h => h.Equals("Severity", StringComparison.OrdinalIgnoreCase));
+
+        if (nameHeader != null) headerList.Remove(nameHeader);
+        if (severityHeader != null) headerList.Remove(severityHeader);
+
+        // Insert in reverse order of desired appearance
+        if (nameHeader != null) headerList.Insert(0, nameHeader);
+        if (severityHeader != null) headerList.Insert(0, severityHeader);
         
         return headerList;
     }
