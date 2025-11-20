@@ -35,11 +35,25 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
+      - name: Check server availability
+        id: ping_check
+        continue-on-error: true
+        run: |
+          if ping -c 3 ${{ secrets.GCP_HOST }} > /dev/null 2>&1; then
+            echo "server_available=true" >> $GITHUB_OUTPUT
+            echo "✅ Server is reachable"
+          else
+            echo "server_available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Server is not reachable, skipping deployment"
+          fi
+
       - name: Resolve IP
+        if: steps.ping_check.outputs.server_available == 'true'
         run: |
           echo "GCP_IP=$(dig +short ${{ secrets.GCP_HOST }} | tail -n1)" >> $GITHUB_ENV
 
       - name: Deploy to GCP instance
+        if: steps.ping_check.outputs.server_available == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ env.GCP_IP }}
@@ -81,6 +95,7 @@ jobs:
             docker compose ps
 
       - name: Verify deployment
+        if: steps.ping_check.outputs.server_available == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ env.GCP_IP }}
