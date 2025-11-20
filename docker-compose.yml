@@ -1,35 +1,9 @@
 services:
-  traefik:
-    image: "traefik:v2.10"
-    container_name: "traefik"
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
-      # Replace with your email
-      - "--certificatesresolvers.myresolver.acme.email=admin@overviewdashboard.duckdns.org"
-      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "80:80"
-      - "443:443"
-      # - "8080:8080" # Dashboard
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "./letsencrypt:/letsencrypt"
-
   overview-dashboard:
     image: "devopsteamsdb/devopsteamsdb:overviewdashboard"
     container_name: "overview-dashboard"
     restart: unless-stopped
+    ports:
+      - "80:8080"
     volumes:
       - "/var/overview-dashboard/data:/app/Database"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`overviewdashboard.duckdns.org`)"
-      - "traefik.http.routers.dashboard.entrypoints=websecure"
-      - "traefik.http.routers.dashboard.tls.certresolver=myresolver"
-      - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
