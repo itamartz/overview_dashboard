@@ -5,6 +5,21 @@ using OverviewDashboard.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseWindowsService();
+
+// Configure forwarded headers for proxy support
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// Add services to the container.
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
+
+// Add API Controllers
 builder.Services.AddControllers();
 
 // Add Swagger/OpenAPI
