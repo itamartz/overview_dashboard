@@ -29,6 +29,9 @@ jobs:
       - name: Save Docker image
         run: docker save ${{ env.IMAGE_NAME }}:latest -o image.tar
 
+      - name: Check image size
+        run: ls -lh image.tar
+
       - name: Copy image to GCP instance
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -37,6 +40,7 @@ jobs:
           key: ${{ secrets.GCP_SSH_KEY }}
           source: "image.tar"
           target: "/tmp/"
+          timeout: "300s"
 
       - name: Deploy to GCP instance
         uses: appleboy/ssh-action@v1.0.3
