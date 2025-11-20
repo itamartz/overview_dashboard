@@ -45,7 +45,13 @@ jobs:
           host: ${{ env.GCP_IP }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
-          source: "image.tar"
+      - name: Copy files to GCP instance
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.GCP_IP }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          source: "image.tar,docker-compose.yml"
           target: "/tmp/"
           timeout: "300s"
 
@@ -59,18 +65,21 @@ jobs:
             # Load the Docker image
             docker load -i /tmp/image.tar
             
-            # Stop and remove existing container if it exists
+            # Create deployment directory
+            mkdir -p ~/overview-dashboard
+            mv /tmp/docker-compose.yml ~/overview-dashboard/
+            cd ~/overview-dashboard
+            
+            # Stop and remove existing container if it exists (migration from docker run)
             docker stop ${{ env.CONTAINER_NAME }} 2>/dev/null || true
             docker rm ${{ env.CONTAINER_NAME }} 2>/dev/null || true
             
-            # Run the new container
-            docker run -d \
-              --name ${{ env.CONTAINER_NAME }} \
-              --restart unless-stopped \
-              -p 80:8080 \
-              -p 443:8081 \
-              -v /var/overview-dashboard/data:/app/Database \
-              ${{ env.IMAGE_NAME }}:latest
+            # Run with Docker Compose
+            # Pass IMAGE_NAME to the compose file if needed, but we hardcoded it in compose.
+            # Actually, we should ensure the image name matches.
+            # The compose file uses "overview-dashboard:latest".
+            
+            docker compose up -d --remove-orphans
             
             # Clean up
             rm /tmp/image.tar
@@ -79,7 +88,7 @@ jobs:
             docker image prune -af --filter "until=72h"
             
             # Show running containers
-            docker ps -a | grep ${{ env.CONTAINER_NAME }}
+            docker compose ps
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
