@@ -27,17 +27,17 @@ jobs:
           docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
 
       - name: Save Docker image
-        run: docker save ${{ env.IMAGE_NAME }}:latest -o image.tar
+        run: docker save ${{ env.IMAGE_NAME }}:latest | gzip > image.tar.gz
 
       - name: Fix image permissions
-        run: chmod 644 image.tar
+        run: chmod 644 image.tar.gz
 
       - name: Resolve IP
         run: |
           echo "GCP_IP=$(dig +short ${{ secrets.GCP_HOST }} | tail -n1)" >> $GITHUB_ENV
 
       - name: Check image size
-        run: ls -lh image.tar
+        run: ls -lh image.tar.gz
 
       - name: Copy image to GCP instance
         uses: appleboy/scp-action@v0.1.7
@@ -45,13 +45,7 @@ jobs:
           host: ${{ env.GCP_IP }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
-      - name: Copy image to GCP instance
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ env.GCP_IP }}
-          username: ${{ secrets.GCP_USERNAME }}
-          key: ${{ secrets.GCP_SSH_KEY }}
-          source: "image.tar"
+          source: "image.tar.gz"
           target: "/tmp/"
           timeout: "300s"
 
@@ -73,7 +67,7 @@ jobs:
           key: ${{ secrets.GCP_SSH_KEY }}
           script: |
             # Load the Docker image
-            docker load -i /tmp/image.tar
+            zcat /tmp/image.tar.gz | docker load
             
             # Create deployment directory
             mkdir -p ~/overview-dashboard
@@ -85,14 +79,10 @@ jobs:
             docker rm ${{ env.CONTAINER_NAME }} 2>/dev/null || true
             
             # Run with Docker Compose
-            # Pass IMAGE_NAME to the compose file if needed, but we hardcoded it in compose.
-            # Actually, we should ensure the image name matches.
-            # The compose file uses "overview-dashboard:latest".
-            
             docker compose up -d --remove-orphans
             
             # Clean up
-            rm /tmp/image.tar
+            rm /tmp/image.tar.gz
             
             # Remove old images (keep last 3)
             docker image prune -af --filter "until=72h"
