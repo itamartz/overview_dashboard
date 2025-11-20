@@ -1,16 +1,10 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using OverviewDashboard.Components;
 using OverviewDashboard.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseWindowsService();
-
-// Add services to the container.
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
-
-// Add API Controllers
 builder.Services.AddControllers();
 
 // Add Swagger/OpenAPI
@@ -40,6 +34,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline.
+app.UseForwardedHeaders();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -48,10 +44,10 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    app.UseHsts();
+    // Don't use HSTS when behind a reverse proxy
 }
 
-app.UseHttpsRedirection();
+// Don't use HTTPS redirection - Traefik handles SSL termination
 app.UseAntiforgery();
 
 app.MapStaticAssets();

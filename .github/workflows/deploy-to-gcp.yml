@@ -74,6 +74,11 @@ jobs:
             mv /tmp/docker-compose.yml ~/overview-dashboard/
             cd ~/overview-dashboard
             
+            # Create letsencrypt directory and acme.json with correct permissions
+            mkdir -p letsencrypt
+            touch letsencrypt/acme.json
+            chmod 600 letsencrypt/acme.json
+            
             # Stop and remove existing container if it exists (migration from docker run)
             docker stop ${{ env.CONTAINER_NAME }} 2>/dev/null || true
             docker rm ${{ env.CONTAINER_NAME }} 2>/dev/null || true
