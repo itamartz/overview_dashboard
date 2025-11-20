@@ -27,7 +27,7 @@ jobs:
           docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
 
       - name: Save Docker image
-        run: docker save ${{ env.IMAGE_NAME }}:${{ github.sha }} -o image.tar
+        run: docker save ${{ env.IMAGE_NAME }}:latest -o image.tar
 
       - name: Fix image permissions
         run: chmod 644 image.tar
