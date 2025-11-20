@@ -29,7 +29,7 @@ jobs:
         id: ping_check
         continue-on-error: true
         run: |
-          if ping -c 3 ${{ env.GCP_IP }} > /dev/null 2>&1; then
+          if ping -c 10 -W 5 ${{ env.GCP_IP }} > /dev/null 2>&1; then
             echo "server_available=true" >> $GITHUB_OUTPUT
             echo "✅ Server is reachable at ${{ env.GCP_IP }}"
           else
