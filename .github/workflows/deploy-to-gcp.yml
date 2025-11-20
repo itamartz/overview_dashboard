@@ -77,7 +77,7 @@ jobs:
                   - "/var/overview-dashboard/data:/app/Database"
                 labels:
                   - "traefik.enable=true"
-                  - "traefik.http.routers.dashboard.rule=Host(\`overviewdashboard.duckdns.org\`)"
+                  - "traefik.http.routers.dashboard.rule=Host(\"overviewdashboard.duckdns.org\")"
                   - "traefik.http.routers.dashboard.entrypoints=websecure"
                   - "traefik.http.routers.dashboard.tls.certresolver=myresolver"
                   - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
