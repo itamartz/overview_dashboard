@@ -45,13 +45,23 @@ jobs:
           host: ${{ env.GCP_IP }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
-      - name: Copy files to GCP instance
+      - name: Copy image to GCP instance
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.GCP_IP }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
-          source: "image.tar,docker-compose.yml"
+          source: "image.tar"
+          target: "/tmp/"
+          timeout: "300s"
+
+      - name: Copy docker-compose to GCP instance
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.GCP_IP }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          source: "docker-compose.yml"
           target: "/tmp/"
           timeout: "300s"
 
