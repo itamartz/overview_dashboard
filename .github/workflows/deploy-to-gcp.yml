@@ -32,13 +32,17 @@ jobs:
       - name: Fix image permissions
         run: chmod 644 image.tar
 
+      - name: Resolve IP
+        run: |
+          echo "GCP_IP=$(dig +short ${{ secrets.GCP_HOST }} | tail -n1)" >> $GITHUB_ENV
+
       - name: Check image size
         run: ls -lh image.tar
 
       - name: Copy image to GCP instance
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.GCP_HOST }}
+          host: ${{ env.GCP_IP }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           source: "image.tar"
@@ -48,7 +52,7 @@ jobs:
       - name: Deploy to GCP instance
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.GCP_HOST }}
+          host: ${{ env.GCP_IP }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           script: |
@@ -80,7 +84,7 @@ jobs:
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.GCP_HOST }}
+          host: ${{ env.GCP_IP }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           script: |
