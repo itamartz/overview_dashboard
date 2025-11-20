@@ -22,7 +22,7 @@ services:
       - "./letsencrypt:/letsencrypt"
 
   overview-dashboard:
-    image: "overview-dashboard:latest"
+    image: "devopsteamsdb/devopsteamsdb:overviewdashboard"
     container_name: "overview-dashboard"
     restart: unless-stopped
     volumes:

@@ -7,7 +7,8 @@ on:
   workflow_dispatch:  # Allows manual triggering
 
 env:
-  IMAGE_NAME: overview-dashboard
+  IMAGE_NAME: devopsteamsdb/devopsteamsdb
+  IMAGE_TAG: overviewdashboard
   CONTAINER_NAME: overview-dashboard
 
 jobs:
@@ -21,54 +22,36 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
-          docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
-
-      - name: Save Docker image
-        run: docker save ${{ env.IMAGE_NAME }}:latest | gzip > image.tar.gz
-
-      - name: Fix image permissions
-        run: chmod 644 image.tar.gz
-
-      - name: Resolve IP
-        run: |
-          echo "GCP_IP=$(dig +short ${{ secrets.GCP_HOST }} | tail -n1)" >> $GITHUB_ENV
-
-      - name: Check image size
-        run: ls -lh image.tar.gz
-
-      - name: Copy image to GCP instance
-        uses: appleboy/scp-action@v0.1.7
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          host: ${{ env.GCP_IP }}
-          username: ${{ secrets.GCP_USERNAME }}
-          key: ${{ secrets.GCP_SSH_KEY }}
-          source: "image.tar.gz"
-          target: "/tmp/"
-          timeout: "300s"
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
       - name: Copy docker-compose to GCP instance
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ env.GCP_IP }}
+          host: ${{ secrets.GCP_HOST }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           source: "docker-compose.yml"
           target: "/tmp/"
-          timeout: "300s"
+          timeout: "60s"
 
       - name: Deploy to GCP instance
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ env.GCP_IP }}
+          host: ${{ secrets.GCP_HOST }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           script: |
-            # Load the Docker image
-            zcat /tmp/image.tar.gz | docker load
-            
             # Create deployment directory
             mkdir -p ~/overview-dashboard
             mv /tmp/docker-compose.yml ~/overview-dashboard/
@@ -83,11 +66,11 @@ jobs:
             docker stop ${{ env.CONTAINER_NAME }} 2>/dev/null || true
             docker rm ${{ env.CONTAINER_NAME }} 2>/dev/null || true
             
+            # Pull latest image from Docker Hub
+            docker pull ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            
             # Run with Docker Compose
             docker compose up -d --remove-orphans
-            
-            # Clean up
-            rm /tmp/image.tar.gz
             
             # Remove old images (keep last 3)
             docker image prune -af --filter "until=72h"
@@ -98,7 +81,7 @@ jobs:
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ env.GCP_IP }}
+          host: ${{ secrets.GCP_HOST }}
           username: ${{ secrets.GCP_USERNAME }}
           key: ${{ secrets.GCP_SSH_KEY }}
           script: |
