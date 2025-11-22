@@ -28,6 +28,7 @@
                 var isSystemSelected = selectedSystem == systemName;
                 var errorCount = systemGroup.Count(c => GetSeverity(c) == "error");
                 var warningCount = systemGroup.Count(c => GetSeverity(c) == "warning");
+                var offlineCount = systemGroup.Count(c => GetSeverity(c) == "offline");
 
                 <div class="nav-item @(isSystemSelected ? "active" : "")" @onclick="() => SelectSystem(systemName)">
                     <span class="nav-item-name">@systemName</span>
@@ -39,6 +40,10 @@
                         @if (warningCount > 0)
                         {
                             <span class="nav-item-badge badge-warning">@warningCount</span>
+                        }
+                        @if (offlineCount > 0)
+                        {
+                            <span class="nav-item-badge badge-offline">@offlineCount</span>
                         }
                     </div>
                 </div>
@@ -52,6 +57,7 @@
                         var isProjectSelected = selectedProject == projectName;
                         var projectErrorCount = projectGroup.Count(c => GetSeverity(c) == "error");
                         var projectWarningCount = projectGroup.Count(c => GetSeverity(c) == "warning");
+                        var projectOfflineCount = projectGroup.Count(c => GetSeverity(c) == "offline");
 
                         <div class="nav-subitem @(isProjectSelected ? "active" : "")" @onclick="() => SelectProject(systemName, projectName)">
                             <span>@projectName</span>
@@ -63,6 +69,10 @@
                                 @if (projectWarningCount > 0)
                                 {
                                     <span class="nav-item-badge badge-warning">@projectWarningCount</span>
+                                }
+                                @if (projectOfflineCount > 0)
+                                {
+                                    <span class="nav-item-badge badge-offline">@projectOfflineCount</span>
                                 }
                             </div>
                         </div>
@@ -84,7 +94,7 @@
             <!-- Summary Cards -->
             <div class="cards-container">
                 @{
-                    var counts = new Dictionary<string, int> { { "ok", 0 }, { "warning", 0 }, { "error", 0 }, { "info", 0 } };
+                    var counts = new Dictionary<string, int> { { "ok", 0 }, { "warning", 0 }, { "error", 0 }, { "info", 0 }, { "offline", 0 } };
                     foreach (var c in contextComponents)
                     {
                         var severity = GetSeverity(c);
@@ -115,6 +125,12 @@
                     <div class="card-label">Info</div>
                     <div class="card-value">@counts["info"]</div>
                 </div>
+
+                <div class="summary-card card-offline @(activeFilter == "offline" ? "active-filter" : "")" @onclick='() => FilterBySeverity("offline")'>
+                    <div class="card-icon-bg">?</div>
+                    <div class="card-label">Offline</div>
+                    <div class="card-value">@counts["offline"]</div>
+                </div>
             </div>
 
             <style>
@@ -134,6 +150,9 @@
                 .card-warning.active-filter { box-shadow: 0 0 15px rgba(255, 193, 7, 0.6); }
                 .card-error.active-filter { box-shadow: 0 0 15px rgba(220, 53, 69, 0.6); }
                 .card-info.active-filter { box-shadow: 0 0 15px rgba(23, 162, 184, 0.6); }
+                .card-offline.active-filter { box-shadow: 0 0 15px rgba(108, 117, 125, 0.6); }
+                
+
 
                 .search-box {
                     padding: 8px 12px;
@@ -198,7 +217,8 @@
                                         {
                                             @if (header.Equals("Severity", StringComparison.OrdinalIgnoreCase))
                                             {
-                                                <span class="severity-badge severity-@value.ToString()?.ToLower()">@value</span>
+                                                var severity = GetSeverity(component);
+                                                <span class="severity-badge severity-@severity">@severity</span>
                                             }
                                             else
                                             {
@@ -501,8 +521,14 @@
         return headerList;
     }
 
+    private static readonly TimeSpan StaleThreshold = TimeSpan.FromMinutes(10);
+
     private string GetSeverity(Component component)
     {
+        if (DateTime.UtcNow - component.CreatedAt > StaleThreshold)
+        {
+            return "offline";
+        }
         var payload = ParsePayload(component.Payload);
         if (payload.TryGetValue("Severity", out var severity))
         {
@@ -515,6 +541,7 @@
     {
         var severities = components.Select(GetSeverity).ToList();
         if (severities.Contains("error")) return "error";
+        if (severities.Contains("offline")) return "offline"; // Prioritize offline after error? Or before? usually offline is bad.
         if (severities.Contains("warning")) return "warning";
         if (severities.Contains("info")) return "info";
         return "ok";

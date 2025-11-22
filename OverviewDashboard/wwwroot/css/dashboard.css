@@ -122,6 +122,11 @@ body {
     color: white;
 }
 
+.badge-offline {
+    background: #95a5a6;
+    color: white;
+}
+
 .nav-subitem {
     padding: 8px 20px 8px 40px;
     font-size: 13px;
@@ -242,6 +247,10 @@ body {
     background: #3498db;
 }
 
+.summary-card.card-offline {
+    background: #95a5a6;
+}
+
 .card-label {
     font-size: 12px;
     color: rgba(255, 255, 255, 0.9);
@@ -348,6 +357,11 @@ body {
 .severity-info {
     background: #d6eaf8;
     color: #3498db;
+}
+
+.severity-offline {
+    background: #bdc3c7;
+    color: #7f8c8d;
 }
 
 .metric-badge {
