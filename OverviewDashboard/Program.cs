@@ -67,12 +67,11 @@ using (var scope = app.Services.CreateScope())
 // Configure the HTTP request pipeline.
 app.UseForwardedHeaders();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-else
+// Enable Swagger in all environments
+app.UseSwagger();
+app.UseSwaggerUI();
+
+if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     // Don't use HSTS when behind a reverse proxy
