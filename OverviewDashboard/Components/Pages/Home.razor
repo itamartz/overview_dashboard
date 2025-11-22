@@ -521,7 +521,7 @@
         return headerList;
     }
 
-    private static readonly TimeSpan StaleThreshold = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan StaleThreshold = TimeSpan.FromHours(1);
 
     private string GetSeverity(Component component)
     {
