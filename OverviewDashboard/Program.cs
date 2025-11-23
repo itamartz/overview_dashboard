@@ -4,6 +4,9 @@ using OverviewDashboard.Components;
 using OverviewDashboard.Data;
 using OverviewDashboard.Models;
 
+// Set current directory to the application base directory to ensure relative paths work correctly in Windows Service
+Directory.SetCurrentDirectory(AppContext.BaseDirectory);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseWindowsService();
