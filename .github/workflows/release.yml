@@ -20,6 +20,9 @@ jobs:
     - name: Publish
       run: dotnet publish OverviewDashboard/OverviewDashboard.csproj -c Release -o ./publish -r win-x64 --self-contained true -p:PublishSingleFile=true
 
+    - name: Copy Deployment Script
+      run: Copy-Item -Path ./Deploy-WindowsService.ps1 -Destination ./publish/Deploy-WindowsService.ps1
+
     - name: Create Zip archive
       run: Compress-Archive -Path ./publish/* -DestinationPath ./OverviewDashboard-win-x64.zip
 

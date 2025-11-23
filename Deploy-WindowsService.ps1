@@ -27,45 +27,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$projectPath = "$PSScriptRoot\OverviewDashboard"
-$csprojFile = "$projectPath\OverviewDashboard.csproj"
-$programFile = "$projectPath\Program.cs"
-
-Write-Host "=== Overview Dashboard - Windows Service Deployment ===" -ForegroundColor Cyan
-Write-Host ""
-
-# Step 1: Add Windows Service package
-Write-Host "[1/6] Adding Windows Service support..." -ForegroundColor Yellow
-$csprojContent = Get-Content $csprojFile -Raw
-
-if ($csprojContent -notmatch "Microsoft.Extensions.Hosting.WindowsServices") {
-    $packageReference = '  <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.0" />
-  </ItemGroup>'
-    
-    $csprojContent = $csprojContent -replace '(</Project>)', "$packageReference`n`$1"
-    Set-Content -Path $csprojFile -Value $csprojContent -NoNewline
-    Write-Host "   [OK] Added Microsoft.Extensions.Hosting.WindowsServices package" -ForegroundColor Green
-}
-else {
-    Write-Host "   [OK] Windows Service package already present" -ForegroundColor Green
-}
-
-# Step 2: Update Program.cs
-Write-Host "[2/6] Updating Program.cs..." -ForegroundColor Yellow
-$programContent = Get-Content $programFile -Raw
-
-if ($programContent -notmatch "UseWindowsService") {
-    $programContent = $programContent -replace '(var builder = WebApplication\.CreateBuilder\(args\);)', "`$1`n`nbuilder.Host.UseWindowsService();"
-    Set-Content -Path $programFile -Value $programContent -NoNewline
-    Write-Host "   [OK] Added UseWindowsService() to Program.cs" -ForegroundColor Green
-}
-else {
-    Write-Host "   [OK] UseWindowsService() already present" -ForegroundColor Green
-}
-
-# Step 3: Stop existing service if running
-Write-Host "[3/6] Checking for existing service..." -ForegroundColor Yellow
+# Step 1: Stop existing service if running
+Write-Host "[1/4] Checking for existing service..." -ForegroundColor Yellow
 $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existingService) {
     Write-Host "   [WARN] Service exists, stopping..." -ForegroundColor Yellow
@@ -77,30 +40,24 @@ else {
     Write-Host "   [OK] No existing service found" -ForegroundColor Green
 }
 
-# Step 4: Publish application
-Write-Host "[4/6] Publishing application..." -ForegroundColor Yellow
-Write-Host "   Publishing to: $TargetPath" -ForegroundColor Gray
+# Step 2: Install application files
+Write-Host "[2/4] Installing application files..." -ForegroundColor Yellow
+Write-Host "   Source:      $PSScriptRoot" -ForegroundColor Gray
+Write-Host "   Destination: $TargetPath" -ForegroundColor Gray
 
 # Create target directory if it doesn't exist
 if (!(Test-Path $TargetPath)) {
     New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
 }
 
-# Publish as self-contained
-Push-Location $projectPath
-try {
-    dotnet publish -c Release -r win-x64 --self-contained true -o $TargetPath --nologo 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Publish failed with exit code $LASTEXITCODE"
-    }
-    Write-Host "   [OK] Application published successfully" -ForegroundColor Green
-}
-finally {
-    Pop-Location
-}
+# Copy files
+$exclude = @("Deploy-WindowsService.ps1", "*.pdb")
+Get-ChildItem -Path $PSScriptRoot -Exclude $exclude | Copy-Item -Destination $TargetPath -Recurse -Force
 
-# Step 5: Configure appsettings for service
-Write-Host "[5/6] Configuring application..." -ForegroundColor Yellow
+Write-Host "   [OK] Files copied successfully" -ForegroundColor Green
+
+# Step 3: Configure appsettings for service
+Write-Host "[3/4] Configuring application..." -ForegroundColor Yellow
 $appsettingsPath = "$TargetPath\appsettings.json"
 $appsettings = @{
     Logging      = @{
@@ -122,8 +79,8 @@ $appsettings = @{
 Set-Content -Path $appsettingsPath -Value $appsettings
 Write-Host "   [OK] Configured to listen on port $Port" -ForegroundColor Green
 
-# Step 6: Install and start service
-Write-Host "[6/6] Installing Windows Service..." -ForegroundColor Yellow
+# Step 4: Install and start service
+Write-Host "[4/4] Installing Windows Service..." -ForegroundColor Yellow
 
 if ($existingService) {
     Write-Host "   Updating existing service..." -ForegroundColor Gray
