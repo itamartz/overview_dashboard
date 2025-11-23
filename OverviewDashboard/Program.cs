@@ -84,6 +84,9 @@ using (var scope = app.Services.CreateScope())
 // Configure the HTTP request pipeline.
 app.UseForwardedHeaders();
 
+// Serve static files
+app.UseStaticFiles();
+
 // Enable Swagger in all environments
 app.UseSwagger();
 app.UseSwaggerUI();
@@ -96,8 +99,6 @@ if (!app.Environment.IsDevelopment())
 
 // Don't use HTTPS redirection - Traefik handles SSL termination
 app.UseAntiforgery();
-
-app.MapStaticAssets();
 
 // Map API Controllers
 app.MapControllers();
