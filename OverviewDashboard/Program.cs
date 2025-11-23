@@ -46,6 +46,20 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+    
+    // Ensure database directory exists
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=dashboard.db";
+    var match = System.Text.RegularExpressions.Regex.Match(connectionString, "Data Source=([^;]+)");
+    if (match.Success)
+    {
+        var dbPath = match.Groups[1].Value;
+        var dbDir = Path.GetDirectoryName(dbPath);
+        if (!string.IsNullOrEmpty(dbDir) && !Directory.Exists(dbDir))
+        {
+            Directory.CreateDirectory(dbDir);
+        }
+    }
+
     db.Database.EnsureCreated();
     
     // Create default Welcome event if database is empty
