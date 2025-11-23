@@ -1,0 +1,33 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Publish
+      run: dotnet publish OverviewDashboard/OverviewDashboard.csproj -c Release -o ./publish -r win-x64 --self-contained true -p:PublishSingleFile=true
+
+    - name: Create Zip archive
+      run: Compress-Archive -Path ./publish/* -DestinationPath ./OverviewDashboard-win-x64.zip
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: OverviewDashboard-win-x64.zip
+        generate_release_notes: true
