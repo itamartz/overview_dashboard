@@ -1,3 +1,5 @@
+name: Build and Create Release
+
 on:
   push:
     branches: [ "main" ]
