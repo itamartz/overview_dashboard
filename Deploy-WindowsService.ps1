@@ -60,14 +60,17 @@ Write-Host "   [OK] Files copied successfully" -ForegroundColor Green
 Write-Host "[3/4] Configuring application..." -ForegroundColor Yellow
 $appsettingsPath = "$TargetPath\appsettings.json"
 $appsettings = @{
-    Logging      = @{
+    Logging           = @{
         LogLevel = @{
             Default                = "Information"
             "Microsoft.AspNetCore" = "Warning"
         }
     }
-    AllowedHosts = "*"
-    Kestrel      = @{
+    ConnectionStrings = @{
+        DefaultConnection = "Data Source=Database/dashboard.db"
+    }
+    AllowedHosts      = "*"
+    Kestrel           = @{
         Endpoints = @{
             Http = @{
                 Url = "http://0.0.0.0:$Port"
