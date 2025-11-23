@@ -67,7 +67,7 @@ $appsettings = @{
         }
     }
     ConnectionStrings = @{
-        DefaultConnection = "Data Source=Database/dashboard.db"
+        DefaultConnection = "Data Source=$TargetPath\Database\dashboard.db"
     }
     AllowedHosts      = "*"
     Kestrel           = @{
