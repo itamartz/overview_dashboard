@@ -2,8 +2,10 @@
 @using Microsoft.EntityFrameworkCore
 @using OverviewDashboard.Data
 @using OverviewDashboard.Models
+@using OverviewDashboard.Services
 @using System.Text.Json
 @inject IServiceScopeFactory ScopeFactory
+@inject DashboardStateService StateService
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 
@@ -14,7 +16,7 @@
     <div class="nav-panel">
         <div class="nav-header">
             <h2>Systems Overview</h2>
-            <div class="timestamp">@DateTime.Now.ToString("T")</div>
+            <div class="timestamp" id="live-clock"></div>
         </div>
 
         <div class="nav-content">
@@ -284,6 +286,10 @@
     {
         await LoadData();
 
+        // Subscribe to state changes for real-time updates
+        StateService.OnChange += OnStateChanged;
+
+        // Keep polling as fallback (every 30 seconds instead of 2)
         _timer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
@@ -291,11 +297,24 @@
                 await RefreshData();
                 StateHasChanged();
             });
-        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    private async void OnStateChanged()
+    {
+        // This is called from the API controller thread, so we need InvokeAsync
+        await InvokeAsync(async () =>
+        {
+            await RefreshData();
+            StateHasChanged();
+        });
     }
 
     public async ValueTask DisposeAsync()
     {
+        // Unsubscribe from state changes
+        StateService.OnChange -= OnStateChanged;
+        
         if (_timer is not null)
         {
             await _timer.DisposeAsync();
@@ -556,3 +575,19 @@
         return $"{(int)span.TotalDays} day{((int)span.TotalDays > 1 ? "s" : "")} ago";
     }
 }
+
+<script>
+    // Update clock every second
+    function updateClock() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { hour12: false });
+        const clockElement = document.getElementById('live-clock');
+        if (clockElement) {
+            clockElement.textContent = timeString;
+        }
+    }
+    
+    // Update immediately and then every second
+    updateClock();
+    setInterval(updateClock, 1000);
+</script>

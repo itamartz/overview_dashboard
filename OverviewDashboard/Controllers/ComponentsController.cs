@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using OverviewDashboard.Data;
+using OverviewDashboard.Hubs;
 using OverviewDashboard.Models;
+using OverviewDashboard.Services;
 using System.Text.Json;
 
 namespace OverviewDashboard.Controllers
@@ -16,11 +19,15 @@ namespace OverviewDashboard.Controllers
     {
         private readonly DashboardDbContext _context;
         private readonly ILogger<ComponentsController> _logger;
+        private readonly IHubContext<DashboardHub> _hubContext;
+        private readonly DashboardStateService _stateService;
 
-        public ComponentsController(DashboardDbContext context, ILogger<ComponentsController> logger)
+        public ComponentsController(DashboardDbContext context, ILogger<ComponentsController> logger, IHubContext<DashboardHub> hubContext, DashboardStateService stateService)
         {
             _context = context;
             _logger = logger;
+            _hubContext = hubContext;
+            _stateService = stateService;
         }
 
         /// <summary>
@@ -121,6 +128,13 @@ namespace OverviewDashboard.Controllers
                     await _context.SaveChangesAsync();
                     
                     _logger.LogInformation("Updated component {Id} for System: {System}, Project: {Project}", payloadId, systemName, projectName);
+                    
+                    // Notify clients (SignalR)
+                    await _hubContext.Clients.All.SendAsync("DataChanged");
+                    
+                    // Notify internal state (Blazor Server)
+                    _stateService.NotifyStateChanged();
+                    
                     return Ok(existingComponent);
                 }
                 else
@@ -138,6 +152,12 @@ namespace OverviewDashboard.Controllers
                     await _context.SaveChangesAsync();
 
                     _logger.LogInformation("Created component for System: {System}, Project: {Project}", systemName, projectName);
+
+                    // Notify clients (SignalR)
+                    await _hubContext.Clients.All.SendAsync("DataChanged");
+
+                    // Notify internal state (Blazor Server)
+                    _stateService.NotifyStateChanged();
 
                     return CreatedAtAction(nameof(GetById), new { id = component.Id }, component);
                 }
@@ -163,6 +183,12 @@ namespace OverviewDashboard.Controllers
 
             _context.Components.Remove(component);
             await _context.SaveChangesAsync();
+
+            // Notify clients (SignalR)
+            await _hubContext.Clients.All.SendAsync("DataChanged");
+
+            // Notify internal state (Blazor Server)
+            _stateService.NotifyStateChanged();
 
             return NoContent();
         }
