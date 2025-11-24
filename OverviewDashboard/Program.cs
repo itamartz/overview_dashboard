@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using OverviewDashboard.Components;
 using OverviewDashboard.Data;
 using OverviewDashboard.Models;
+using OverviewDashboard.Services;
 
 // Set current directory to the application base directory to ensure relative paths work correctly in Windows Service
 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
@@ -23,8 +24,14 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Add State Management Service
+builder.Services.AddSingleton<DashboardStateService>();
+
 // Add API Controllers
 builder.Services.AddControllers();
+
+// Add SignalR
+builder.Services.AddSignalR();
 
 // Add Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
@@ -102,6 +109,9 @@ app.UseAntiforgery();
 
 // Map API Controllers
 app.MapControllers();
+
+// Map SignalR Hub
+app.MapHub<OverviewDashboard.Hubs.DashboardHub>("/dashboardHub");
 
 // Map Blazor Components
 app.MapRazorComponents<App>()
