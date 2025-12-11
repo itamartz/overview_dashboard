@@ -1,0 +1,14 @@
+description = "Force kills the running application and restarts it with dotnet run"
+
+prompt = """
+// turbo-all
+I need you to restart the application. Please execute the following sequence in the terminal immediately:
+
+1. Force kill the existing process:
+   `taskkill /f /im overviewdashboard.exe`
+   
+2. Once terminated, start the application again:
+   `dotnet run`
+
+If the kill command fails because the process isn't running, ignore the error and proceed to run.
+"""
