@@ -1,0 +1,10 @@
+[Unit]
+Description=Run OCP Dashboard Monitoring Script Every 5 Minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=10sec
+Unit=monitor-ocp.service
+
+[Install]
+WantedBy=timers.target
