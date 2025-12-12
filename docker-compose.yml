@@ -1,6 +1,7 @@
 services:
   overview-dashboard:
     image: "devopsteamsdb/devopsteamsdb:overviewdashboard"
+    #image: "overview-dashboard:latest"
     container_name: "overview-dashboard"
     restart: unless-stopped
     ports:

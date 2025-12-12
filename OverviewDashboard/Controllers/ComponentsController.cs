@@ -82,19 +82,45 @@ namespace OverviewDashboard.Controllers
                     return BadRequest("systemName and projectName cannot be empty");
                 }
 
-                // Check for "Id" in the payload for Upsert logic
-                string? payloadId = null;
-                if (payloadProp.ValueKind == JsonValueKind.Object && payloadProp.TryGetProperty("Id", out var idProp))
+                // Helper to safely get string property case-insensitive
+                string? GetStringPropertyCaseInsensitive(JsonElement element, string propName)
                 {
-                    payloadId = idProp.ToString();
+                    if (element.ValueKind != JsonValueKind.Object) return null;
+                    foreach (var prop in element.EnumerateObject())
+                    {
+                        if (string.Equals(prop.Name, propName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return prop.Value.ToString();
+                        }
+                    }
+                    return null;
                 }
+
+                // Prepare payload element for inspection
+                JsonElement payloadElement = payloadProp;
+                if (payloadProp.ValueKind == JsonValueKind.String)
+                {
+                    try
+                    {
+                        // If payload is a string, try to parse it as JSON object to check fields
+                        var doc = JsonDocument.Parse(payloadProp.GetString()!);
+                        payloadElement = doc.RootElement;
+                    }
+                    catch
+                    {
+                        // Not valid JSON string, treat as opaque string
+                    }
+                }
+
+                string? payloadId = GetStringPropertyCaseInsensitive(payloadElement, "Id");
+                string? payloadName = GetStringPropertyCaseInsensitive(payloadElement, "Name");
+                string? payloadNamespace = GetStringPropertyCaseInsensitive(payloadElement, "Namespace");
 
                 Component? existingComponent = null;
 
-                if (!string.IsNullOrEmpty(payloadId))
+                if (!string.IsNullOrEmpty(payloadId) || !string.IsNullOrEmpty(payloadName))
                 {
-                    // Find existing component with same System, Project, and Payload.Id
-                    // Since Payload is a string, we have to fetch candidates and parse
+                    // Find existing component with same System, Project, and Payload details
                     var candidates = await _context.Components
                         .Where(c => c.SystemName == systemName && c.ProjectName == projectName)
                         .ToListAsync();
@@ -104,8 +130,42 @@ namespace OverviewDashboard.Controllers
                         try
                         {
                             using var doc = JsonDocument.Parse(c.Payload);
-                            if (doc.RootElement.TryGetProperty("Id", out var existingIdProp) && 
-                                existingIdProp.ToString() == payloadId)
+                            var root = doc.RootElement;
+                            bool isMatch = false;
+
+                            // 1. Try matching by ID
+                            if (!string.IsNullOrEmpty(payloadId))
+                            {
+                                var existingId = GetStringPropertyCaseInsensitive(root, "Id");
+                                if (existingId == payloadId)
+                                {
+                                    isMatch = true;
+                                }
+                            }
+                            // 2. Try matching by Name (and Namespace)
+                            else if (!string.IsNullOrEmpty(payloadName))
+                            {
+                                var existingName = GetStringPropertyCaseInsensitive(root, "Name");
+                                if (existingName == payloadName)
+                                {
+                                    // Check Namespace
+                                    if (!string.IsNullOrEmpty(payloadNamespace))
+                                    {
+                                        var existingNamespace = GetStringPropertyCaseInsensitive(root, "Namespace");
+                                        if (existingNamespace == payloadNamespace)
+                                        {
+                                            isMatch = true;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // Match by Name only if Namespace not provided in request
+                                        isMatch = true;
+                                    }
+                                }
+                            }
+
+                            if (isMatch)
                             {
                                 existingComponent = c;
                                 break;
@@ -113,7 +173,7 @@ namespace OverviewDashboard.Controllers
                         }
                         catch
                         {
-                            // Ignore parsing errors for existing data
+                            // Ignore parsing errors
                         }
                     }
                 }

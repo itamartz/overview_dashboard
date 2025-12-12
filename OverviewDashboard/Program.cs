@@ -6,7 +6,12 @@ using OverviewDashboard.Models;
 using OverviewDashboard.Services;
 
 // Set current directory to the application base directory to ensure relative paths work correctly in Windows Service
-Directory.SetCurrentDirectory(AppContext.BaseDirectory);
+// But ONLY if not in Development, otherwise it breaks 'dotnet run' which expects ContentRoot to be the project folder
+var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+if (environment != "Development")
+{
+    Directory.SetCurrentDirectory(AppContext.BaseDirectory);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
