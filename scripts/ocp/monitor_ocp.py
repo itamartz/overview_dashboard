@@ -6,7 +6,7 @@ import os
 import sys
 
 # Configuration
-API_URL = os.getenv("DASHBOARD_API_URL", "http://<dashboard_ip>:5203/api/components")
+API_URL = os.getenv("DASHBOARD_API_URL", "https://overview/api/components")
 SYSTEM_NAME = "OpenShift"
 
 # Resource Mapping

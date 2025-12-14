@@ -85,8 +85,8 @@ def main():
     parser.add_argument(
         '--api-url',
         type=str,
-        default='http://localhost:5000/api/components',
-        help='API endpoint URL (default: http://localhost:5000/api/components)'
+        default='https://overview/api/components',
+        help='API endpoint URL (default: https://overview/api/components)'
     )
     parser.add_argument(
         '--timeout',

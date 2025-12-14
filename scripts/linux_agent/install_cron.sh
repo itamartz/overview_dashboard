@@ -144,14 +144,14 @@ if [[ ! -f "$AGENT_SCRIPT" ]]; then
     exit 1
 fi
 
-# Check for Python 3
+# Check for Python 3 and get full path for cron
 PYTHON_CMD=""
 if command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
+    PYTHON_CMD="$(which python3)"
 elif command -v python &> /dev/null; then
     PYTHON_VERSION=$(python --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1)
     if [[ "$PYTHON_VERSION" == "3" ]]; then
-        PYTHON_CMD="python"
+        PYTHON_CMD="$(which python)"
     fi
 fi
 
@@ -159,6 +159,8 @@ if [[ -z "$PYTHON_CMD" ]]; then
     print_error "Python 3 is required but not found"
     exit 1
 fi
+
+print_info "Using Python: ${PYTHON_CMD}"
 
 # Build the cron command
 CRON_CMD="${PYTHON_CMD} ${AGENT_SCRIPT}${EXTRA_ARGS} >> ${LOG_FILE} 2>&1"

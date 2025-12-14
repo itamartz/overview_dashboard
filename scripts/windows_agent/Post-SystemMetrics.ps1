@@ -19,7 +19,7 @@
 #>
 
 param(
-    [string]$ApiUrl = "http://localhost:5000/api/components",
+    [string]$ApiUrl = "https://overview/api/components",
     [int]$TimeoutSeconds = 10
 )
 

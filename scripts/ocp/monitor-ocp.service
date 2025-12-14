@@ -6,4 +6,4 @@ After=network.target
 Type=oneshot
 ExecStart=/usr/bin/python3 /opt/monitoring/monitor_ocp.py
 User=root
-Environment="DASHBOARD_API_URL=http://<dashboard_ip>:5203/api/components"
+Environment="DASHBOARD_API_URL=https://overview/api/components"
