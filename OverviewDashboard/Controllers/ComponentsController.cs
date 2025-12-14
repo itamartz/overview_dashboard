@@ -252,5 +252,48 @@ namespace OverviewDashboard.Controllers
 
             return NoContent();
         }
+
+        /// <summary>
+        /// Delete all components for a specific system and project
+        /// </summary>
+        /// <param name="systemName">The name of the system</param>
+        /// <param name="projectName">The name of the project to clear</param>
+        /// <returns>The number of components deleted</returns>
+        [HttpDelete("system/{systemName}/project/{projectName}")]
+        public async Task<IActionResult> DeleteBySystemAndProject(string systemName, string projectName)
+        {
+            if (string.IsNullOrEmpty(systemName))
+            {
+                return BadRequest("System name cannot be empty");
+            }
+
+            if (string.IsNullOrEmpty(projectName))
+            {
+                return BadRequest("Project name cannot be empty");
+            }
+
+            var components = await _context.Components
+                .Where(c => c.SystemName == systemName && c.ProjectName == projectName)
+                .ToListAsync();
+
+            if (!components.Any())
+            {
+                return NotFound($"No components found for system '{systemName}' and project '{projectName}'");
+            }
+
+            var count = components.Count;
+            _context.Components.RemoveRange(components);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Deleted {Count} components from system '{SystemName}', project '{ProjectName}'", count, systemName, projectName);
+
+            // Notify clients (SignalR)
+            await _hubContext.Clients.All.SendAsync("DataChanged");
+
+            // Notify internal state (Blazor Server)
+            _stateService.NotifyStateChanged();
+
+            return Ok(new { message = $"Deleted {count} components from system '{systemName}', project '{projectName}'", count });
+        }
     }
 }
