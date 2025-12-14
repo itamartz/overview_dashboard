@@ -420,8 +420,8 @@ def main():
     parser.add_argument(
         '--project-name',
         type=str,
-        default='Workstations',
-        help='Project name for the payload (default: Workstations)'
+        default='Servers',
+        help='Project name for the payload (default: Servers)'
     )
     parser.add_argument(
         '--system-name',
