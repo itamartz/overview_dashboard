@@ -32,6 +32,9 @@ builder.Services.AddRazorComponents()
 // Add State Management Service
 builder.Services.AddSingleton<DashboardStateService>();
 
+// Add Data Service for optimized queries
+builder.Services.AddScoped<DashboardDataService>();
+
 // Add API Controllers
 builder.Services.AddControllers();
 

@@ -30,6 +30,16 @@ namespace OverviewDashboard.Data
             modelBuilder.Entity<Component>()
                 .Property(c => c.Payload)
                 .IsRequired();
+
+            // Performance indexes
+            modelBuilder.Entity<Component>()
+                .HasIndex(c => c.SystemName);
+
+            modelBuilder.Entity<Component>()
+                .HasIndex(c => c.ProjectName);
+
+            modelBuilder.Entity<Component>()
+                .HasIndex(c => new { c.SystemName, c.ProjectName });
         }
     }
 }
