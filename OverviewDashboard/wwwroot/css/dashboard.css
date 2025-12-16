@@ -316,7 +316,7 @@ body {
 }
 
 .data-table td {
-    padding: 18px 25px;
+    padding: 10px 25px;
     border-bottom: 1px solid #ecf0f1;
     font-size: 14px;
     color: #2c3e50;
@@ -409,4 +409,119 @@ body {
     background: #e74c3c;
     color: white;
     opacity: 1;
+}
+
+/* Table Header Bar */
+.table-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 25px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.table-header-bar h3 {
+    color: #34495e;
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Pagination Inline */
+.pagination-inline {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pagination-inline>button {
+    background: transparent;
+    color: #7f8c8d;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.pagination-inline>button:hover:not(:disabled) {
+    background: #ecf0f1;
+    color: #2c3e50;
+}
+
+.pagination-inline>button:disabled {
+    color: #bdc3c7;
+    cursor: not-allowed;
+}
+
+.page-numbers {
+    display: flex;
+    gap: 2px;
+}
+
+.page-btn {
+    min-width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    color: #7f8c8d;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.page-btn:hover {
+    background: #ecf0f1;
+    color: #2c3e50;
+}
+
+.page-btn.active {
+    background: #3498db;
+    color: white;
+}
+
+.page-info {
+    color: #95a5a6;
+    font-size: 13px;
+    margin-left: 10px;
+    white-space: nowrap;
+}
+
+/* Search Box */
+.search-box {
+    padding: 7px 12px;
+    border: 1px solid #dfe6e9;
+    border-radius: 5px;
+    font-size: 13px;
+    color: #2c3e50;
+    background: white;
+    transition: all 0.2s;
+    width: 180px;
+}
+
+.search-box:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+.search-box::placeholder {
+    color: #bdc3c7;
+}
+
+/* Table Scroll Container */
+.table-scroll-container {
+    overflow-x: auto;
 }
