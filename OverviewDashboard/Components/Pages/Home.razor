@@ -4,15 +4,15 @@
 @using OverviewDashboard.Models
 @using OverviewDashboard.Services
 @using System.Text.Json
-@inject IServiceScopeFactory ScopeFactory
+@inject DashboardDataService DataService
 @inject DashboardStateService StateService
+@inject IConfiguration Configuration
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 
 <PageTitle>System Overview Dashboard</PageTitle>
 
 <style>
-    /* Clickable nav header */
     .nav-title-link {
         cursor: pointer;
         transition: color 0.2s, text-shadow 0.2s;
@@ -21,8 +21,6 @@
         color: #3498db;
         text-shadow: 0 0 8px rgba(52, 152, 219, 0.3);
     }
-
-    /* Health summary styles */
     .health-summary {
         padding: 1rem;
         display: flex;
@@ -36,8 +34,6 @@
     .clickable-row:hover {
         background-color: rgba(52, 152, 219, 0.1);
     }
-
-    /* Severity block styles */
     .severity-block {
         flex: 0 0 calc(50% - 0.5rem);
         margin-bottom: 0.5rem;
@@ -70,24 +66,10 @@
     .severity-block-offline .severity-block-header::before { content: '?'; }
     .severity-block-ok .severity-block-header::before { content: '✓'; }
     .severity-block-info .severity-block-header::before { content: 'ⓘ'; }
-    .severity-icon {
-        font-size: 1.5rem;
-        z-index: 1;
-    }
-    .severity-title {
-        font-weight: 600;
-        flex: 1;
-        z-index: 1;
-    }
-    .severity-count {
-        font-size: 0.9rem;
-        opacity: 0.9;
-        z-index: 1;
-    }
-    .severity-block-content {
-        background: #fff;
-        padding: 0.25rem 0;
-    }
+    .severity-icon { font-size: 1.5rem; z-index: 1; }
+    .severity-title { font-weight: 600; flex: 1; z-index: 1; }
+    .severity-count { font-size: 0.9rem; opacity: 0.9; z-index: 1; }
+    .severity-block-content { background: #fff; padding: 0.25rem 0; }
     .severity-item {
         display: flex;
         align-items: center;
@@ -95,43 +77,99 @@
         padding: 0.4rem 1.5rem;
         border-bottom: 1px solid #f0f0f0;
     }
-    .severity-item:last-child {
-        border-bottom: none;
+    .severity-item:last-child { border-bottom: none; }
+    .item-system { color: #666; }
+    .item-separator { color: #ccc; }
+    .item-project { font-weight: 500; flex: 1; }
+    .item-count { background: #f0f0f0; padding: 2px 10px; border-radius: 12px; font-size: 0.85rem; color: #666; }
+    .severity-block-error .severity-block-header { background: linear-gradient(135deg, #dc3545, #c82333); }
+    .severity-block-warning .severity-block-header { background: linear-gradient(135deg, #ffc107, #e0a800); color: #333; }
+    .severity-block-offline .severity-block-header { background: linear-gradient(135deg, #6c757d, #545b62); }
+    .severity-block-ok .severity-block-header { background: linear-gradient(135deg, #28a745, #1e7e34); }
+    .severity-block-info .severity-block-header { background: linear-gradient(135deg, #17a2b8, #138496); }
+
+    /* Table styles */
+    .table-scroll-container {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
     }
-    .item-system {
-        color: #666;
+    .table-scroll-container table {
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
     }
-    .item-separator {
-        color: #ccc;
-    }
-    .item-project {
-        font-weight: 500;
-        flex: 1;
-    }
-    .item-count {
-        background: #f0f0f0;
-        padding: 2px 10px;
-        border-radius: 12px;
-        font-size: 0.85rem;
-        color: #666;
+    .table-scroll-container thead th {
+        position: sticky;
+        top: 0;
+        background: linear-gradient(135deg, #2c3e50, #34495e);
+        color: white;
+        z-index: 10;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
-    /* Severity block colors */
-    .severity-block-error .severity-block-header {
-        background: linear-gradient(135deg, #dc3545, #c82333);
+    /* Header with pagination inline */
+    .table-header-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1rem;
     }
-    .severity-block-warning .severity-block-header {
-        background: linear-gradient(135deg, #ffc107, #e0a800);
-        color: #333;
+    .table-header-bar h3 {
+        margin: 0;
     }
-    .severity-block-offline .severity-block-header {
-        background: linear-gradient(135deg, #6c757d, #545b62);
+    .header-controls {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
     }
-    .severity-block-ok .severity-block-header {
-        background: linear-gradient(135deg, #28a745, #1e7e34);
+
+    /* Inline pagination styles */
+    .pagination-inline {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
     }
-    .severity-block-info .severity-block-header {
-        background: linear-gradient(135deg, #17a2b8, #138496);
+    .pagination-inline button {
+        padding: 0.25rem 0.5rem;
+        border: 1px solid #ddd;
+        background: white;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+    .pagination-inline button:hover:not(:disabled) {
+        background: #3498db;
+        color: white;
+        border-color: #3498db;
+    }
+    .pagination-inline button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    .pagination-inline .page-info {
+        padding: 0 0.5rem;
+        font-size: 0.85rem;
+        color: #666;
+        white-space: nowrap;
+    }
+    .pagination-inline .page-numbers {
+        display: flex;
+        gap: 2px;
+    }
+    .pagination-inline .page-btn {
+        min-width: 28px;
+        padding: 0.25rem;
+        text-align: center;
+    }
+    .pagination-inline .page-btn.active {
+        background: #3498db;
+        color: white;
+        border-color: #3498db;
     }
 </style>
 
@@ -144,67 +182,57 @@
         </div>
 
         <div class="nav-content">
-            @{
-                var systemGroups = components.GroupBy(c => c.SystemName).OrderBy(g => g.Key);
-            }
-            @foreach (var systemGroup in systemGroups)
-            {
-                var systemName = systemGroup.Key;
-                var systemSeverity = GetWorstSeverity(systemGroup.ToList());
-                var isSystemSelected = selectedSystem == systemName;
-                var errorCount = systemGroup.Count(c => GetSeverity(c) == "error");
-                var warningCount = systemGroup.Count(c => GetSeverity(c) == "warning");
-                var offlineCount = systemGroup.Count(c => GetSeverity(c) == "offline");
-
-                <div class="nav-item @(isSystemSelected ? "active" : "")" @onclick="() => SelectSystem(systemName)">
-                    <span class="nav-item-name">@systemName</span>
-                    <div style="display: flex; gap: 5px; align-items: center;">
-                        @if (errorCount > 0)
-                        {
-                            <span class="nav-item-badge badge-error">@errorCount</span>
-                        }
-                        @if (warningCount > 0)
-                        {
-                            <span class="nav-item-badge badge-warning">@warningCount</span>
-                        }
-                        @if (offlineCount > 0)
-                        {
-                            <span class="nav-item-badge badge-offline">@offlineCount</span>
-                        }
-                    </div>
-                </div>
-
-                @if (isSystemSelected)
+            @foreach (var systemGroup in summaries.GroupBy(s => s.SystemName).OrderBy(g => g.Key))
                 {
-                    @foreach (var projectGroup in systemGroup.GroupBy(c => c.ProjectName).OrderBy(g => g.Key))
-                    {
-                        var projectName = projectGroup.Key;
-                        var projectSeverity = GetWorstSeverity(projectGroup.ToList());
-                        var isProjectSelected = selectedProject == projectName;
-                        var projectErrorCount = projectGroup.Count(c => GetSeverity(c) == "error");
-                        var projectWarningCount = projectGroup.Count(c => GetSeverity(c) == "warning");
-                        var projectOfflineCount = projectGroup.Count(c => GetSeverity(c) == "offline");
+                    var systemName = systemGroup.Key;
+                    var isSystemSelected = selectedSystem == systemName;
+                    var systemErrors = systemGroup.Sum(s => s.ErrorCount);
+                    var systemWarnings = systemGroup.Sum(s => s.WarningCount);
+                    var systemOffline = systemGroup.Sum(s => s.OfflineCount);
 
-                        <div class="nav-subitem @(isProjectSelected ? "active" : "")" @onclick="() => SelectProject(systemName, projectName)">
-                            <span>@projectName</span>
-                            <div style="display: flex; gap: 5px; align-items: center;">
-                                @if (projectErrorCount > 0)
-                                {
-                                    <span class="nav-item-badge badge-error">@projectErrorCount</span>
-                                }
-                                @if (projectWarningCount > 0)
-                                {
-                                    <span class="nav-item-badge badge-warning">@projectWarningCount</span>
-                                }
-                                @if (projectOfflineCount > 0)
-                                {
-                                    <span class="nav-item-badge badge-offline">@projectOfflineCount</span>
-                                }
-                            </div>
+                    <div class="nav-item @(isSystemSelected ? "active" : "")" @onclick="() => SelectSystem(systemName)">
+                        <span class="nav-item-name">@systemName</span>
+                        <div style="display: flex; gap: 5px; align-items: center;">
+                            @if (systemErrors > 0)
+                            {
+                                <span class="nav-item-badge badge-error">@systemErrors</span>
+                            }
+                            @if (systemWarnings > 0)
+                            {
+                                <span class="nav-item-badge badge-warning">@systemWarnings</span>
+                            }
+                            @if (systemOffline > 0)
+                            {
+                                <span class="nav-item-badge badge-offline">@systemOffline</span>
+                            }
                         </div>
+                    </div>
+
+                    @if (isSystemSelected)
+                    {
+                        @foreach (var project in systemGroup.OrderBy(p => p.ProjectName))
+                        {
+                            var isProjectSelected = selectedProject == project.ProjectName;
+                            <div class="nav-subitem @(isProjectSelected ? "active" : "")" @onclick="() => SelectProject(systemName, project.ProjectName)">
+                                <span>@project.ProjectName</span>
+                                <div style="display: flex; gap: 5px; align-items: center;">
+                                    @if (project.ErrorCount > 0)
+                                    {
+                                        <span class="nav-item-badge badge-error">@project.ErrorCount</span>
+                                    }
+                                    @if (project.WarningCount > 0)
+                                    {
+                                        <span class="nav-item-badge badge-warning">@project.WarningCount</span>
+                                    }
+                                    @if (project.OfflineCount > 0)
+                                    {
+                                        <span class="nav-item-badge badge-offline">@project.OfflineCount</span>
+                                    }
+                                </div>
+                            </div>
+                        }
                     }
                 }
-            }
         </div>
     </div>
 
@@ -215,322 +243,175 @@
             <p>@contentSubtitle</p>
         </div>
 
-        @if (contextComponents != null && contextComponents.Any())
+        @if (selectedProject != null && selectedSystem != null)
         {
             <!-- Summary Cards -->
             <div class="cards-container">
-                @{
-                    var counts = new Dictionary<string, int> { { "ok", 0 }, { "warning", 0 }, { "error", 0 }, { "info", 0 }, { "offline", 0 } };
-                    foreach (var c in contextComponents)
-                    {
-                        var severity = GetSeverity(c);
-                        if (counts.ContainsKey(severity)) counts[severity]++;
-                    }
-                }
-
                 <div class="summary-card card-ok @(activeFilter == "ok" ? "active-filter" : "")" @onclick='() => FilterBySeverity("ok")'>
                     <div class="card-icon-bg">✓</div>
                     <div class="card-label">OK</div>
-                    <div class="card-value">@counts["ok"]</div>
+                    <div class="card-value">@severityCounts.Ok</div>
                 </div>
-
                 <div class="summary-card card-warning @(activeFilter == "warning" ? "active-filter" : "")" @onclick='() => FilterBySeverity("warning")'>
                     <div class="card-icon-bg">⚠</div>
                     <div class="card-label">Warning</div>
-                    <div class="card-value">@counts["warning"]</div>
+                    <div class="card-value">@severityCounts.Warning</div>
                 </div>
-
                 <div class="summary-card card-error @(activeFilter == "error" ? "active-filter" : "")" @onclick='() => FilterBySeverity("error")'>
                     <div class="card-icon-bg">✕</div>
                     <div class="card-label">Error</div>
-                    <div class="card-value">@counts["error"]</div>
+                    <div class="card-value">@severityCounts.Error</div>
                 </div>
-
                 <div class="summary-card card-info @(activeFilter == "info" ? "active-filter" : "")" @onclick='() => FilterBySeverity("info")'>
                     <div class="card-icon-bg">ⓘ</div>
                     <div class="card-label">Info</div>
-                    <div class="card-value">@counts["info"]</div>
+                    <div class="card-value">@severityCounts.Info</div>
                 </div>
-
                 <div class="summary-card card-offline @(activeFilter == "offline" ? "active-filter" : "")" @onclick='() => FilterBySeverity("offline")'>
                     <div class="card-icon-bg">?</div>
                     <div class="card-label">Offline</div>
-                    <div class="card-value">@counts["offline"]</div>
+                    <div class="card-value">@severityCounts.Offline</div>
                 </div>
             </div>
 
             <style>
-                .summary-card {
-                    cursor: pointer;
-                    transition: transform 0.2s, box-shadow 0.2s;
-                }
-                .summary-card:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-                }
-                .active-filter {
-                    border: 3px solid white;
-                    transform: scale(1.05);
-                }
+                .summary-card { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+                .summary-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+                .active-filter { border: 3px solid white; transform: scale(1.05); }
                 .card-ok.active-filter { box-shadow: 0 0 15px rgba(40, 167, 69, 0.6); }
                 .card-warning.active-filter { box-shadow: 0 0 15px rgba(255, 193, 7, 0.6); }
                 .card-error.active-filter { box-shadow: 0 0 15px rgba(220, 53, 69, 0.6); }
                 .card-info.active-filter { box-shadow: 0 0 15px rgba(23, 162, 184, 0.6); }
                 .card-offline.active-filter { box-shadow: 0 0 15px rgba(108, 117, 125, 0.6); }
-                
-
-
-                .search-box {
-                    padding: 8px 12px;
-                    border: 1px solid #dfe6e9;
-                    border-radius: 5px;
-                    width: 250px;
-                    font-size: 14px;
-                    outline: none;
-                    transition: border-color 0.3s;
-                }
-                .search-box:focus {
-                    border-color: #3498db;
-                }
-
-                .btn-clear {
-                    padding: 10px 20px;
-                    background: #95a5a6;
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 14px;
-                    transition: all 0.3s;
-                    margin-top: 10px;
-                }
-                .btn-clear:hover {
-                    background: #7f8c8d;
-                }
-
-                /* Clickable nav header */
-                .nav-title-link {
-                    cursor: pointer;
-                    transition: color 0.2s, text-shadow 0.2s;
-                }
-                .nav-title-link:hover {
-                    color: #3498db;
-                    text-shadow: 0 0 8px rgba(52, 152, 219, 0.3);
-                }
-
-                /* Health summary styles */
-                .health-summary {
-                    padding: 1rem;
-                }
-                .summary-table {
-                    margin-top: 0;
-                }
-                .clickable-row {
-                    cursor: pointer;
-                    transition: background-color 0.2s;
-                }
-                .clickable-row:hover {
-                    background-color: rgba(52, 152, 219, 0.1);
-                }
-                .row-error {
-                    border-left: 4px solid #dc3545;
-                }
-                .row-warning {
-                    border-left: 4px solid #ffc107;
-                }
-                .row-offline {
-                    border-left: 4px solid #6c757d;
-                }
-                .count-error {
-                    color: #dc3545;
-                    font-weight: bold;
-                }
-                .count-warning {
-                    color: #ffc107;
-                    font-weight: bold;
-                }
-                .count-offline {
-                    color: #6c757d;
-                    font-weight: bold;
-                }
-                .count-ok {
-                    color: #28a745;
-                    font-weight: bold;
-                }
-
-                /* Severity block styles */
-                .severity-block {
-                    margin-bottom: 1.5rem;
-                    border-radius: 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                }
-                .severity-block-header {
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                    padding: 1rem 1.5rem;
-                    color: white;
-                    font-size: 1.1rem;
-                }
-                .severity-icon {
-                    font-size: 1.5rem;
-                }
-                .severity-title {
-                    font-weight: 600;
-                    flex: 1;
-                }
-                .severity-count {
-                    font-size: 0.9rem;
-                    opacity: 0.9;
-                }
-                .severity-block-content {
-                    background: #fff;
-                    padding: 0.5rem 0;
-                }
-                .severity-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    padding: 0.75rem 1.5rem;
-                    border-bottom: 1px solid #f0f0f0;
-                }
-                .severity-item:last-child {
-                    border-bottom: none;
-                }
-                .item-system {
-                    color: #666;
-                }
-                .item-separator {
-                    color: #ccc;
-                }
-                .item-project {
-                    font-weight: 500;
-                    flex: 1;
-                }
-                .item-count {
-                    background: #f0f0f0;
-                    padding: 2px 10px;
-                    border-radius: 12px;
-                    font-size: 0.85rem;
-                    color: #666;
-                }
-
-                /* Severity block colors */
-                .severity-block-error .severity-block-header {
-                    background: linear-gradient(135deg, #dc3545, #c82333);
-                }
-                .severity-block-warning .severity-block-header {
-                    background: linear-gradient(135deg, #ffc107, #e0a800);
-                    color: #333;
-                }
-                .severity-block-offline .severity-block-header {
-                    background: linear-gradient(135deg, #6c757d, #545b62);
-                }
-                .severity-block-ok .severity-block-header {
-                    background: linear-gradient(135deg, #28a745, #1e7e34);
-                }
-                .severity-block-info .severity-block-header {
-                    background: linear-gradient(135deg, #17a2b8, #138496);
-                }
+                .search-box { padding: 8px 12px; border: 1px solid #dfe6e9; border-radius: 5px; width: 250px; font-size: 14px; outline: none; transition: border-color 0.3s; }
+                .search-box:focus { border-color: #3498db; }
             </style>
 
-            <!-- Dynamic Data Table -->
+            <!-- Data Table with Pagination -->
             <div class="table-container">
-                <div class="table-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <h3>@filteredComponents.Count Components</h3>
-                    <input type="text" class="search-box" placeholder="Search..." @bind="searchText" @bind:event="oninput" />
-                </div>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th @onclick='() => SortBy("CreatedAt")' style="cursor: pointer;">
-                                Created At @GetSortIndicator("CreatedAt")
-                            </th>
-                            @foreach (var header in GetDynamicHeaders())
-                            {
-                                <th @onclick="() => SortBy(header)" style="cursor: pointer;">
-                                    @header @GetSortIndicator(header)
-                                </th>
-                            }
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var component in filteredComponents)
+                <div class="table-header-bar">
+                    <h3>@pagedResult.TotalCount Components</h3>
+                    <div class="header-controls">
+                        @if (pagedResult.TotalPages > 1)
                         {
-                            var payload = ParsePayload(component.Payload);
-                            <tr>
-                                <td class="timestamp-cell">@GetRelativeTime(component.CreatedAt)</td>
-                                @foreach (var header in GetDynamicHeaders())
-                                {
-                                    <td>
-                                        @if (payload.TryGetValue(header, out var value))
-                                        {
-                                            @if (header.Equals("Severity", StringComparison.OrdinalIgnoreCase))
-                                            {
-                                                var severity = GetSeverity(component);
-                                                <span class="severity-badge severity-@severity">@severity</span>
-                                            }
-                                            else
-                                            {
-                                                @value
-                                            }
-                                        }
-                                    </td>
-                                }
-                                <td>
-                                    <button class="delete-btn" @onclick="() => DeleteComponent(component.Id)">🗑️</button>
-                                </td>
-                            </tr>
+                            <div class="pagination-inline">
+                                <button @onclick="FirstPage" disabled="@(currentPage <= 1)" title="First page">««</button>
+                                <button @onclick="PreviousPage" disabled="@(currentPage <= 1)" title="Previous page">«</button>
+
+                                <div class="page-numbers">
+                                    @foreach (var pageNum in GetPageNumbers())
+                                    {
+                                        <button class="page-btn @(pageNum == currentPage ? "active" : "")"
+                                                @onclick="() => GoToPage(pageNum)">@pageNum</button>
+                                    }
+                                </div>
+
+                                <button @onclick="NextPage" disabled="@(currentPage >= pagedResult.TotalPages)" title="Next page">»</button>
+                                <button @onclick="LastPage" disabled="@(currentPage >= pagedResult.TotalPages)" title="Last page">»»</button>
+
+                                <span class="page-info">Page @currentPage / @pagedResult.TotalPages</span>
+                            </div>
                         }
-                    </tbody>
-                </table>
+                        <input type="text" class="search-box" placeholder="Search..." @bind="searchText" @bind:event="oninput" @bind:after="OnSearchChanged" />
+                    </div>
+                </div>
+
+                <div class="table-scroll-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th @onclick='() => SortBy("CreatedAt")' style="cursor: pointer;">
+                                    Created At @GetSortIndicator("CreatedAt")
+                                </th>
+                                @foreach (var header in dynamicHeaders)
+                                {
+                                    <th @onclick="() => SortBy(header)" style="cursor: pointer;">
+                                        @header @GetSortIndicator(header)
+                                    </th>
+                                }
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var component in pagedResult.Items)
+                            {
+                                <tr>
+                                    <td class="timestamp-cell">@GetRelativeTime(component.CreatedAt)</td>
+                                    @foreach (var header in dynamicHeaders)
+                                    {
+                                        <td>
+                                            @if (component.ParsedPayload.TryGetValue(header, out var value))
+                                            {
+                                                @if (header.Equals("Severity", StringComparison.OrdinalIgnoreCase))
+                                                {
+                                                    <span class="severity-badge severity-@component.Severity">@component.Severity</span>
+                                                }
+                                                else
+                                                {
+                                                    @value
+                                                }
+                                            }
+                                        </td>
+                                    }
+                                    <td>
+                                        <button class="delete-btn" @onclick="() => DeleteComponent(component.Id)">🗑️</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
         }
-        else if (components.Any())
+        else if (summaries.Any())
         {
-            @* System Health Summary View - Grouped by Severity *@
+            @* System Health Summary View *@
             <div class="health-summary">
                 @{
                     var severityOrder = new[] { "error", "warning", "offline", "ok", "info" };
-                    var severityLabels = new Dictionary<string, string> 
-                    { 
-                        { "error", "Error" }, { "warning", "Warning" }, { "offline", "Offline" }, 
-                        { "ok", "OK" }, { "info", "Info" } 
+                    var severityLabels = new Dictionary<string, string>
+                    {
+                        { "error", "Error" }, { "warning", "Warning" }, { "offline", "Offline" },
+                        { "ok", "OK" }, { "info", "Info" }
                     };
-                    var severityIcons = new Dictionary<string, string> 
-                    { 
-                        { "error", "✕" }, { "warning", "⚠" }, { "offline", "?" }, 
-                        { "ok", "✓" }, { "info", "ⓘ" } 
+                    var severityIcons = new Dictionary<string, string>
+                    {
+                        { "error", "✕" }, { "warning", "⚠" }, { "offline", "?" },
+                        { "ok", "✓" }, { "info", "ⓘ" }
                     };
                 }
 
                 @foreach (var severity in severityOrder)
                 {
-                    var componentsInSeverity = components.Where(c => GetSeverity(c) == severity).ToList();
-                    if (componentsInSeverity.Count > 0)
+                    var countSelector = severity switch
                     {
-                        var systemsInSeverity = componentsInSeverity
-                            .GroupBy(c => new { c.SystemName, c.ProjectName })
-                            .Select(g => new { g.Key.SystemName, g.Key.ProjectName, Count = g.Count() })
-                            .OrderBy(x => x.SystemName).ThenBy(x => x.ProjectName)
-                            .ToList();
+                        "error" => (Func<SystemProjectSummary, int>)(s => s.ErrorCount),
+                        "warning" => s => s.WarningCount,
+                        "offline" => s => s.OfflineCount,
+                        "ok" => s => s.OkCount,
+                        "info" => s => s.InfoCount,
+                        _ => s => 0
+                    };
 
+                    var itemsWithSeverity = summaries.Where(s => countSelector(s) > 0).ToList();
+                    var totalCount = itemsWithSeverity.Sum(countSelector);
+
+                    if (totalCount > 0)
+                    {
                         <div class="severity-block severity-block-@severity">
                             <div class="severity-block-header">
                                 <span class="severity-icon">@severityIcons[severity]</span>
                                 <span class="severity-title">@severityLabels[severity]</span>
-                                <span class="severity-count">@componentsInSeverity.Count components</span>
+                                <span class="severity-count">@totalCount components</span>
                             </div>
                             <div class="severity-block-content">
-                                @foreach (var item in systemsInSeverity)
+                                @foreach (var item in itemsWithSeverity.OrderBy(x => x.SystemName).ThenBy(x => x.ProjectName))
                                 {
                                     <div class="severity-item clickable-row" @onclick="() => SelectProjectWithFilter(item.SystemName, item.ProjectName, severity)">
                                         <span class="item-system">@item.SystemName</span>
                                         <span class="item-separator">›</span>
                                         <span class="item-project">@item.ProjectName</span>
-                                        <span class="item-count">@item.Count</span>
+                                        <span class="item-count">@countSelector(item)</span>
                                     </div>
                                 }
                             </div>
@@ -542,53 +423,54 @@
         else
         {
             <div style="padding: 2rem; text-align: center; color: #666;">
-                <p>No components found. Waiting for data...</p>
+                <p>@(isLoadingSummaries ? "Loading..." : "No components found. Waiting for data...")</p>
             </div>
         }
     </div>
 </div>
 
 @code {
-    private List<Component> components = new();
-    private List<Component> contextComponents = new();
-    private List<Component> filteredComponents = new();
-    
+    private List<SystemProjectSummary> summaries = new();
+    private PagedResult<ComponentViewModel> pagedResult = new();
+    private SeverityCounts severityCounts = new();
+    private List<string> dynamicHeaders = new();
+
     private string? selectedSystem;
     private string? selectedProject;
     private string? activeFilter;
-    
     private string contentTitle = "System Overview";
     private string contentSubtitle = "Select a system to view details";
-    
-    private System.Threading.Timer? _timer;
 
-    private string? _sortColumn;
-    private bool _sortAscending = true;
+    private bool isLoadingSummaries = true;
 
-    private string _searchText = "";
-    private string searchText
-    {
-        get => _searchText;
-        set
-        {
-            _searchText = value;
-            ApplyFilters();
-        }
-    }
+    private string? sortColumn;
+    private bool sortAscending = true;
+    private string searchText = "";
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 100;
+
+    private System.Threading.Timer? _refreshTimer;
+    private CancellationTokenSource? _searchCts;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadData();
+        // Read PageSize from configuration
+        pageSize = Configuration.GetValue<int>("Dashboard:PageSize", 100);
 
-        // Subscribe to state changes for real-time updates
+        await LoadSummaries();
         StateService.OnChange += OnStateChanged;
 
-        // Keep polling as fallback (every 30 seconds instead of 2)
-        _timer = new System.Threading.Timer(async _ =>
+        _refreshTimer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
             {
-                await RefreshData();
+                await LoadSummaries();
+                if (selectedProject != null && selectedSystem != null)
+                {
+                    await LoadComponentsAsync();
+                }
                 StateHasChanged();
             });
         }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
@@ -596,38 +478,97 @@
 
     private async void OnStateChanged()
     {
-        // This is called from the API controller thread, so we need InvokeAsync
         await InvokeAsync(async () =>
         {
-            await RefreshData();
+            await LoadSummaries();
+            if (selectedProject != null && selectedSystem != null)
+            {
+                await LoadComponentsAsync();
+            }
             StateHasChanged();
         });
     }
 
     public async ValueTask DisposeAsync()
     {
-        // Unsubscribe from state changes
         StateService.OnChange -= OnStateChanged;
-        
-        if (_timer is not null)
+        if (_refreshTimer != null) await _refreshTimer.DisposeAsync();
+        _searchCts?.Cancel();
+    }
+
+    private async Task LoadSummaries()
+    {
+        summaries = await DataService.GetSystemProjectSummariesAsync();
+        isLoadingSummaries = false;
+    }
+
+    private async Task LoadComponentsAsync()
+    {
+        if (selectedSystem == null || selectedProject == null) return;
+
+        var severityTask = DataService.GetSeverityCountsAsync(selectedSystem, selectedProject);
+        var headersTask = DataService.GetDynamicHeadersAsync(selectedSystem, selectedProject);
+        var dataTask = DataService.GetComponentsPagedAsync(
+            selectedSystem, selectedProject, activeFilter, searchText,
+            currentPage, pageSize, sortColumn, sortAscending);
+
+        await Task.WhenAll(severityTask, headersTask, dataTask);
+
+        severityCounts = severityTask.Result;
+        dynamicHeaders = headersTask.Result;
+        pagedResult = dataTask.Result;
+    }
+
+    // Pagination methods
+    private async Task FirstPage()
+    {
+        currentPage = 1;
+        await LoadComponentsAsync();
+    }
+
+    private async Task PreviousPage()
+    {
+        if (currentPage > 1)
         {
-            await _timer.DisposeAsync();
+            currentPage--;
+            await LoadComponentsAsync();
         }
     }
 
-    private async Task LoadData()
+    private async Task NextPage()
     {
-        using var scope = ScopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-        components = await dbContext.Components.ToListAsync();
-        
-        if (selectedProject != null && selectedSystem != null)
+        if (currentPage < pagedResult.TotalPages)
         {
-            SelectProject(selectedSystem, selectedProject, resetFilters: false);
+            currentPage++;
+            await LoadComponentsAsync();
         }
-        else if (selectedSystem != null)
+    }
+
+    private async Task LastPage()
+    {
+        currentPage = pagedResult.TotalPages;
+        await LoadComponentsAsync();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        currentPage = page;
+        await LoadComponentsAsync();
+    }
+
+    private IEnumerable<int> GetPageNumbers()
+    {
+        var total = pagedResult.TotalPages;
+        var current = currentPage;
+
+        // Show max 7 page buttons
+        int start = Math.Max(1, current - 3);
+        int end = Math.Min(total, start + 6);
+        start = Math.Max(1, end - 6);
+
+        for (int i = start; i <= end; i++)
         {
-            SelectSystem(selectedSystem, resetFilters: false);
+            yield return i;
         }
     }
 
@@ -636,274 +577,104 @@
         selectedSystem = null;
         selectedProject = null;
         activeFilter = null;
-        _searchText = "";
+        searchText = "";
+        currentPage = 1;
         contentTitle = "System Overview";
         contentSubtitle = "Overall system health summary";
-        contextComponents = new List<Component>();
-        filteredComponents = new List<Component>();
+        pagedResult = new();
     }
 
-    private async Task RefreshData()
-    {
-        await LoadData();
-    }
-    private void SelectSystem(string systemName, bool resetFilters = true)
+    private async Task SelectSystem(string systemName)
     {
         selectedSystem = systemName;
-        
-        // Navigate to first project in the system instead of showing system-level view
-        var firstProject = components
-            .Where(c => c.SystemName == systemName)
-            .Select(c => c.ProjectName)
-            .OrderBy(p => p)
-            .FirstOrDefault();
-        
+        var firstProject = summaries.FirstOrDefault(s => s.SystemName == systemName);
         if (firstProject != null)
         {
-            SelectProject(systemName, firstProject, resetFilters);
-        }
-        else
-        {
-            // Fallback if no projects exist (shouldn't happen normally)
-            selectedProject = null;
-            contentTitle = $"{systemName} Overview";
-            contentSubtitle = "System Details";
-            
-            if (resetFilters)
-            {
-                activeFilter = null;
-                _searchText = "";
-            }
-            
-            contextComponents = components.Where(c => c.SystemName == systemName).ToList();
-            ApplyFilters();
+            await SelectProject(systemName, firstProject.ProjectName);
         }
     }
 
-    private void SelectProject(string systemName, string projectName, bool resetFilters = true)
+    private async Task SelectProject(string systemName, string projectName, bool resetFilters = true)
     {
         selectedSystem = systemName;
         selectedProject = projectName;
         contentTitle = $"{systemName} - {projectName}";
         contentSubtitle = "Project Details";
-        
+
         if (resetFilters)
         {
             activeFilter = null;
-            _searchText = "";
+            searchText = "";
+            sortColumn = null;
+            currentPage = 1;
         }
-        
-        contextComponents = components.Where(c => c.SystemName == systemName && c.ProjectName == projectName).ToList();
-        ApplyFilters();
+
+        await LoadComponentsAsync();
     }
 
-    private void SelectProjectWithFilter(string systemName, string projectName, string severity)
+    private async Task SelectProjectWithFilter(string systemName, string projectName, string severity)
     {
         selectedSystem = systemName;
         selectedProject = projectName;
+        activeFilter = severity;
+        searchText = "";
+        currentPage = 1;
         contentTitle = $"{systemName} - {projectName}";
         contentSubtitle = "Project Details";
-        
-        // Set the severity filter
-        activeFilter = severity;
-        _searchText = "";
-        
-        contextComponents = components.Where(c => c.SystemName == systemName && c.ProjectName == projectName).ToList();
-        ApplyFilters();
+
+        await LoadComponentsAsync();
     }
 
-    private void FilterBySeverity(string severity)
+    private async Task FilterBySeverity(string severity)
     {
-        if (activeFilter == severity)
-            activeFilter = null;
-        else
-            activeFilter = severity;
-            
-        ApplyFilters();
+        activeFilter = activeFilter == severity ? null : severity;
+        currentPage = 1;
+        await LoadComponentsAsync();
     }
 
-    private void ClearFilter()
+    private async Task OnSearchChanged()
     {
-        activeFilter = null;
-        _searchText = "";
-        ApplyFilters();
-    }
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
 
-    private void ApplyFilters()
-    {
-        var query = contextComponents.AsEnumerable();
-
-        if (!string.IsNullOrEmpty(activeFilter))
+        try
         {
-            query = query.Where(c => GetSeverity(c).Equals(activeFilter, StringComparison.OrdinalIgnoreCase));
+            await Task.Delay(300, _searchCts.Token);
+            currentPage = 1;
+            await LoadComponentsAsync();
         }
-
-        if (!string.IsNullOrWhiteSpace(_searchText))
-        {
-            var term = _searchText.Trim();
-            query = query.Where(c => 
-                c.Payload.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                GetRelativeTime(c.CreatedAt).Contains(term, StringComparison.OrdinalIgnoreCase)
-            );
-        }
-
-        filteredComponents = query.ToList();
-        
-        // Apply sorting if a column is selected
-        if (!string.IsNullOrEmpty(_sortColumn))
-        {
-            filteredComponents = SortComponents(filteredComponents, _sortColumn, _sortAscending);
-        }
+        catch (TaskCanceledException) { }
     }
 
-    private void SortBy(string column)
+    private async Task SortBy(string column)
     {
-        if (_sortColumn == column)
+        if (sortColumn == column)
         {
-            // Toggle sort direction if same column
-            _sortAscending = !_sortAscending;
+            sortAscending = !sortAscending;
         }
         else
         {
-            // New column, default to ascending
-            _sortColumn = column;
-            _sortAscending = true;
+            sortColumn = column;
+            sortAscending = true;
         }
-        
-        ApplyFilters(); // Re-apply filters with new sort
+        currentPage = 1;
+        await LoadComponentsAsync();
     }
 
     private string GetSortIndicator(string column)
     {
-        if (_sortColumn != column) return "";
-        return _sortAscending ? " ▲" : " ▼";
-    }
-
-    private List<Component> SortComponents(List<Component> components, string column, bool ascending)
-    {
-        if (column == "CreatedAt")
-        {
-            return ascending 
-                ? components.OrderBy(c => c.CreatedAt).ToList()
-                : components.OrderByDescending(c => c.CreatedAt).ToList();
-        }
-        
-        // Prepare data for sorting
-        var items = components.Select(c => 
-        {
-            var payload = ParsePayload(c.Payload);
-            string? strVal = payload.TryGetValue(column, out var val) ? val?.ToString() : null;
-            bool isNum = double.TryParse(strVal, out double numVal);
-            return new { Component = c, StrValue = strVal, NumValue = isNum ? (double?)numVal : null };
-        }).ToList();
-
-        // Check if the column should be treated as numeric
-        // We treat it as numeric if all non-null values are numeric
-        var nonNullItems = items.Where(x => x.StrValue != null).ToList();
-        bool isNumeric = nonNullItems.Any() && nonNullItems.All(x => x.NumValue.HasValue);
-
-        if (isNumeric)
-        {
-            return ascending 
-                ? items.OrderBy(x => x.NumValue).Select(x => x.Component).ToList()
-                : items.OrderByDescending(x => x.NumValue).Select(x => x.Component).ToList();
-        }
-
-        // Fallback to string sort
-        return ascending 
-            ? items.OrderBy(x => x.StrValue).Select(x => x.Component).ToList()
-            : items.OrderByDescending(x => x.StrValue).Select(x => x.Component).ToList();
+        if (sortColumn != column) return "";
+        return sortAscending ? " ▲" : " ▼";
     }
 
     private async Task DeleteComponent(int id)
     {
-        using var scope = ScopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-
-        var component = await dbContext.Components.FindAsync(id);
-        if (component != null)
-        {
-            dbContext.Components.Remove(component);
-            await dbContext.SaveChangesAsync();
-            await RefreshData();
-        }
+        await DataService.DeleteComponentAsync(id);
+        await LoadSummaries();
+        await LoadComponentsAsync();
     }
 
-    private Dictionary<string, object> ParsePayload(string json)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new Dictionary<string, object>();
-        }
-        catch
-        {
-            return new Dictionary<string, object>();
-        }
-    }
-
-    private List<string> GetDynamicHeaders()
-    {
-        if (contextComponents == null || !contextComponents.Any()) return new List<string>();
-
-        var headers = new HashSet<string>();
-        foreach (var component in contextComponents)
-        {
-            var payload = ParsePayload(component.Payload);
-            foreach (var key in payload.Keys)
-            {
-                headers.Add(key);
-            }
-        }
-        
-        // Step 1: Sort all headers alphabetically
-        var headerList = headers.OrderBy(h => h).ToList();
-        
-        // Step 2: Hide Id column
-        if (headerList.Contains("Id")) headerList.Remove("Id");
-
-        // Step 3: Prioritize specific columns (Severity, name)
-        // We want the order: Severity, name, [others...]
-        
-        var nameHeader = headerList.FirstOrDefault(h => h.Equals("name", StringComparison.OrdinalIgnoreCase));
-        var severityHeader = headerList.FirstOrDefault(h => h.Equals("Severity", StringComparison.OrdinalIgnoreCase));
-
-        if (nameHeader != null) headerList.Remove(nameHeader);
-        if (severityHeader != null) headerList.Remove(severityHeader);
-
-        // Insert in reverse order of desired appearance
-        if (nameHeader != null) headerList.Insert(0, nameHeader);
-        if (severityHeader != null) headerList.Insert(0, severityHeader);
-        
-        return headerList;
-    }
-
-    private static readonly TimeSpan StaleThreshold = TimeSpan.FromHours(1);
-
-    private string GetSeverity(Component component)
-    {
-        if (DateTime.UtcNow - component.CreatedAt > StaleThreshold)
-        {
-            return "offline";
-        }
-        var payload = ParsePayload(component.Payload);
-        if (payload.TryGetValue("Severity", out var severity))
-        {
-            return severity.ToString()?.ToLower() ?? "info";
-        }
-        return "info";
-    }
-
-    private string GetWorstSeverity(List<Component> components)
-    {
-        var severities = components.Select(GetSeverity).ToList();
-        if (severities.Contains("error")) return "error";
-        if (severities.Contains("offline")) return "offline"; // Prioritize offline after error? Or before? usually offline is bad.
-        if (severities.Contains("warning")) return "warning";
-        if (severities.Contains("info")) return "info";
-        return "ok";
-    }
-
-    private string GetRelativeTime(DateTime dateTime)
+    private static string GetRelativeTime(DateTime dateTime)
     {
         var span = DateTime.UtcNow - dateTime;
         if (span.TotalMinutes < 1) return "Just now";
@@ -914,7 +685,6 @@
 }
 
 <script>
-    // Update clock every second
     function updateClock() {
         const now = new Date();
         const timeString = now.toLocaleTimeString('en-US', { hour12: false });
@@ -923,8 +693,6 @@
             clockElement.textContent = timeString;
         }
     }
-    
-    // Update immediately and then every second
     updateClock();
     setInterval(updateClock, 1000);
 </script>
