@@ -7,6 +7,7 @@ This agent collects metrics from Checkpoint Firewalls (Gaia OS) and formats them
 - **CPU/Memory**: Uses `cpstat os -f multi_cpu` to get per-core utilization and identifies heavy load CPUs.
 - **Cluster State**: Checks `cphaprob state` for High Availability status.
 - **Errors**: Checks for critical device errors using `cphaprob list`.
+- **Heavy Connections**: Checks for heavy connections from today using `fw ctl multik print_heavy_conn`.
 
 ## Requirements
 

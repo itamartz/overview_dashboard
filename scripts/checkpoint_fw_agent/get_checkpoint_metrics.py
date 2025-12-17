@@ -40,7 +40,9 @@ Free Real Memory (Bytes):      2683285504
 Memory Swaps/Sec:              -
 Memory To Disk Transfers/Sec:  -''',
     'cluster': 'Cluster Mode: High Availability (Active Up)\nNumber: 1\nState: Active',
-    'cphaprob_list': 'Device Name: Synchronization\nState: OK\n\nDevice Name: Filter\nState: OK'
+    'cphaprob_list': 'Device Name: Synchronization\nState: OK\n\nDevice Name: Filter\nState: OK',
+    'heavy_conn': '''[fw_60]; conn: 192.168.1.1:3788 -> 192.168.1.3:8080 IPP 6; Instance load: 68%; Connection instance load 91%; StartTime: 17/12/25 03:18:18; Duration: 3; IdentificationTime: 17/12/25 03:18:19; Seervice: 6:8080; Total Bytes: 1123534;
+[fw_60]; conn: 10.0.0.1:1234 -> 10.0.0.2:80 IPP 6; Instance load: 50%; Connection instance load 80%; StartTime: 16/12/25 10:00:00; Duration: 3; IdentificationTime: 16/12/25 10:00:00; Seervice: 6:80; Total Bytes: 5000;'''
 }
 
 def run_command(command: List[str], mock: bool = False, mock_key: str = None) -> str:
@@ -237,12 +239,51 @@ def get_errors(mock: bool = False) -> List[str]:
         
     return errors
 
+def get_heavy_connections(mock: bool = False) -> List[str]:
+    """
+    Check for heavy connections from today.
+    Uses 'fw ctl multik print_heavy_conn'.
+    """
+    heavy_conns = []
+    try:
+        # Get today's date in DD/MM/YY format
+        from datetime import datetime
+        today_str = datetime.now().strftime("%d/%m/%y")
+        
+        # In mock mode, we might need to adjust the date to match the mock data
+        # or adjust the mock data to match today. 
+        # For simplicity, let's assume the mock data has a specific date we look for,
+        # OR we can just use the current date in the mock check if we were generating it dynamically.
+        # But since MOCK_DATA is static, let's just check for the date present in MOCK_DATA if mock=True
+        if mock:
+             # For testing purposes, let's assume "today" is 17/12/25 based on the user request example
+             today_str = "17/12/25"
+
+        output = run_command(['fw', 'ctl', 'multik', 'print_heavy_conn'], mock, 'heavy_conn')
+        
+        if not output:
+            return []
+            
+        lines = output.strip().split('\n')
+        # Get last 5 lines
+        last_5_lines = lines[-5:]
+        
+        for line in last_5_lines:
+            if today_str in line:
+                heavy_conns.append(line.strip())
+                
+    except Exception:
+        pass
+        
+    return heavy_conns
+
 def calculate_severity(
     cpu_usage: float,
     max_cpu_usage: float,
     memory_usage: float,
     cluster_state: str,
     errors: List[str],
+    heavy_connections: List[str],
     warning_threshold: int,
     error_threshold: int
 ) -> str:
@@ -271,6 +312,10 @@ def calculate_severity(
     if errors:
         severity = 'error'
         
+    # Check Heavy Connections
+    if heavy_connections:
+        severity = 'error'
+        
     return severity
 
 def get_hostname() -> str:
@@ -288,6 +333,7 @@ def build_payload(
     free_mem_bytes: int,
     cluster_state: str,
     errors: List[str],
+    heavy_connections: List[str],
     severity: str,
     project_name: str,
     system_name: str
@@ -313,6 +359,11 @@ def build_payload(
         free_percent = round((free_mem_bytes / total_mem_bytes) * 100, 3)
         
     mem_str = f"Free: {free_gb:.3f}GB ({free_percent:.3f}%)"
+    
+    # Format Heavy Connections
+    heavy_conn_str = "None"
+    if heavy_connections:
+        heavy_conn_str = f"{len(heavy_connections)} found"
         
     return {
         'projectName': project_name,
@@ -324,6 +375,7 @@ def build_payload(
             'Memory': mem_str,
             'Cluster State': cluster_state,
             'Errors': error_str,
+            'Heavy Connections': heavy_conn_str,
             'Severity': severity
         }
     }
@@ -364,6 +416,7 @@ def main():
         memory_usage, total_mem, free_mem = get_memory_usage(args.mock)
         cluster_state = get_cluster_state(args.mock)
         errors = get_errors(args.mock)
+        heavy_connections = get_heavy_connections(args.mock)
         
         # Calculate severity
         severity = calculate_severity(
@@ -372,6 +425,7 @@ def main():
             memory_usage,
             cluster_state,
             errors,
+            heavy_connections,
             args.threshold_warning,
             args.threshold_error
         )
@@ -385,6 +439,7 @@ def main():
             free_mem,
             cluster_state,
             errors,
+            heavy_connections,
             severity,
             args.project_name,
             args.system_name
@@ -408,6 +463,14 @@ def main():
             
             print(f"Cluster State: {cluster_state}")
             print(f"Errors: {len(errors)}")
+            
+            if heavy_connections:
+                print_colored(f"Heavy Connections: {len(heavy_connections)} found", 'red')
+                for conn in heavy_connections:
+                    print(f"  - {conn[:100]}...")
+            else:
+                print("Heavy Connections: None")
+                
             print_colored(f"Severity: {severity}", 'red' if severity == 'error' else 'green')
             
             print_colored("\nJSON Output:", 'cyan')

@@ -17,6 +17,8 @@ import sys
 import urllib.request
 import urllib.error
 
+import ssl
+
 # Import the metrics gathering module
 script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, script_dir)
@@ -26,6 +28,7 @@ from get_checkpoint_metrics import (
     get_memory_usage,
     get_cluster_state,
     get_errors,
+    get_heavy_connections,
     calculate_severity,
     build_payload,
     print_colored
@@ -56,8 +59,13 @@ def post_metrics(payload: dict, api_url: str, timeout: int) -> dict:
         method='POST'
     )
     
+    # Create an unverified SSL context
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout, context=ctx) as response:
             response_data = response.read().decode('utf-8')
             if response_data:
                 return json.loads(response_data)
@@ -138,6 +146,7 @@ def main():
         memory_usage, total_mem, free_mem = get_memory_usage(args.mock)
         cluster_state = get_cluster_state(args.mock)
         errors = get_errors(args.mock)
+        heavy_connections = get_heavy_connections(args.mock)
         
         # Calculate severity
         severity = calculate_severity(
@@ -146,6 +155,7 @@ def main():
             memory_usage,
             cluster_state,
             errors,
+            heavy_connections,
             args.threshold_warning,
             args.threshold_error
         )
@@ -159,6 +169,7 @@ def main():
             free_mem,
             cluster_state,
             errors,
+            heavy_connections,
             severity,
             args.project_name,
             args.system_name
