@@ -175,7 +175,19 @@
     <!-- Left Navigation Panel -->
     <div class="nav-panel">
         <div class="nav-header">
-            <h2 class="nav-title-link" @onclick="GoHome" title="Return to overview">Systems Overview</h2>
+            <h2 class="nav-title-link" @onclick="GoHome" title="Return to overview">
+                <span style="
+                    display: inline-block;
+                    width: 28px;
+                    height: 28px;
+                    background-color: currentColor;
+                    -webkit-mask: url('favicon.svg') no-repeat center / contain;
+                    mask: url('favicon.svg') no-repeat center / contain;
+                    margin-right: 8px;
+                    vertical-align: bottom;">
+                </span>
+                Overview Dashboard
+            </h2>
             <div class="timestamp" id="live-clock"></div>
         </div>
 

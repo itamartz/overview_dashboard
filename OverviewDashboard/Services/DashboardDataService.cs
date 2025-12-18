@@ -8,11 +8,13 @@ namespace OverviewDashboard.Services
     public class DashboardDataService
     {
         private readonly IServiceScopeFactory _scopeFactory;
-        private static readonly TimeSpan StaleThreshold = TimeSpan.FromHours(1);
+        private readonly TimeSpan _staleThreshold;
 
-        public DashboardDataService(IServiceScopeFactory scopeFactory)
+        public DashboardDataService(IServiceScopeFactory scopeFactory, IConfiguration configuration)
         {
             _scopeFactory = scopeFactory;
+            var minutes = configuration.GetValue<int>("Dashboard:OfflineThresholdMinutes", 60);
+            _staleThreshold = TimeSpan.FromMinutes(minutes);
         }
 
         /// <summary>
@@ -23,7 +25,7 @@ namespace OverviewDashboard.Services
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
 
-            var staleTime = DateTime.UtcNow - StaleThreshold;
+            var staleTime = DateTime.UtcNow - _staleThreshold;
 
             // Get all components with minimal data for counting
             var components = await db.Components
@@ -66,7 +68,7 @@ namespace OverviewDashboard.Services
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-            var staleTime = DateTime.UtcNow - StaleThreshold;
+            var staleTime = DateTime.UtcNow - _staleThreshold;
 
             // Base query with index-optimized filter
             var query = db.Components
@@ -138,7 +140,7 @@ namespace OverviewDashboard.Services
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-            var staleTime = DateTime.UtcNow - StaleThreshold;
+            var staleTime = DateTime.UtcNow - _staleThreshold;
 
             var components = await db.Components
                 .Where(c => c.SystemName == systemName && c.ProjectName == projectName)
@@ -211,7 +213,7 @@ namespace OverviewDashboard.Services
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-            var staleTime = DateTime.UtcNow - StaleThreshold;
+            var staleTime = DateTime.UtcNow - _staleThreshold;
 
             var query = db.Components
                 .Where(c => c.SystemName == systemName && c.ProjectName == projectName);

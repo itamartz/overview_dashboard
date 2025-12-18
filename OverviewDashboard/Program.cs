@@ -35,6 +35,9 @@ builder.Services.AddSingleton<DashboardStateService>();
 // Add Data Service for optimized queries
 builder.Services.AddScoped<DashboardDataService>();
 
+// Add Cleanup Service
+builder.Services.AddHostedService<CleanupHostedService>();
+
 // Add API Controllers
 builder.Services.AddControllers();
 
