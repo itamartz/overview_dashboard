@@ -39,7 +39,26 @@ Active Real Memory (Bytes):    3293835264
 Free Real Memory (Bytes):      2683285504
 Memory Swaps/Sec:              -
 Memory To Disk Transfers/Sec:  -''',
-    'cluster': 'Cluster Mode: High Availability (Active Up)\nNumber: 1\nState: Active',
+    'cluster': '''Cluster Mode:   High Availability (Active Up)
+
+Sync Mode:   Optimized Sync
+
+ID         Unique Address  Assigned Load   State
+
+1 (local)  10.231.149.1    100%            ACTIVE
+2          10.231.149.2    0%              STANDBY
+
+Active PNOTEs: None
+
+Last member state change event:
+   Event Code:                 CLUS-114904
+   State change:               ACTIVE(!) -> ACTIVE
+   Reason for state change:    Reason for ACTIVE! alert has been resolved
+   Event time:                 Wed Mar 12 01:33:38 2025
+
+Cluster failover count:
+   Failover counter:           0
+   Time of counter reset:      Wed Mar 12 00:32:50 2025 (reboot)''',
     'cphaprob_list': 'Device Name: Synchronization\nState: OK\n\nDevice Name: Filter\nState: OK',
     'heavy_conn': '''[fw_60]; conn: 192.168.1.1:3788 -> 192.168.1.3:8080 IPP 6; Instance load: 68%; Connection instance load 91%; StartTime: 17/12/25 03:18:18; Duration: 3; IdentificationTime: 17/12/25 03:18:19; Seervice: 6:8080; Total Bytes: 1123534;
 [fw_60]; conn: 10.0.0.1:1234 -> 10.0.0.2:80 IPP 6; Instance load: 50%; Connection instance load 80%; StartTime: 16/12/25 10:00:00; Duration: 3; IdentificationTime: 16/12/25 10:00:00; Seervice: 6:80; Total Bytes: 5000;'''
@@ -195,12 +214,23 @@ def get_cluster_state(mock: bool = False) -> str:
     try:
         output = run_command(['cphaprob', 'state'], mock, 'cluster')
         
-        # Look for "State: Active" or "State: Standby" or "State: Down"
+        # Look for "State: Active" or "State: Standby" or "State: Down" (Old format)
         match = re.search(r'State:\s*(.+)', output)
         if match:
             return match.group(1).strip()
             
-        # Alternative output format check
+        # Parse table format (New format)
+        # Look for the line with "(local)" and extract the state (last column)
+        # Example: 1 (local)  10.231.149.1    100%            ACTIVE
+        for line in output.split('\n'):
+            if '(local)' in line:
+                parts = line.split()
+                if parts:
+                    state = parts[-1]
+                    # Convert ACTIVE -> Active, STANDBY -> Standby
+                    return state.capitalize()
+
+        # Fallback
         if "Active" in output:
             return "Active"
         elif "Standby" in output:
