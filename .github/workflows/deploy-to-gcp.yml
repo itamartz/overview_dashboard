@@ -75,10 +75,15 @@ jobs:
                 image: "devopsteamsdb/devopsteamsdb:overviewdashboard"
                 container_name: "overview-dashboard"
                 restart: unless-stopped
-                ports:
-                  - "80:8080"
+                #ports:
+                #  - "80:8080"
                 volumes:
                   - "/var/overview-dashboard/data:/app/Database"
+                networks:
+                      - web_transport
+            networks:
+              web_transport:
+                external: true
             EOF
             
             # Stop and remove existing containers
