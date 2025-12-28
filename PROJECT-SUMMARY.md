@@ -40,6 +40,11 @@ A production-ready IT infrastructure monitoring system with:
     - **Pagination**: Efficiently browse thousands of events.
     - **Collapsible Sidebar**: Maximize screen real estate for data analysis with a toggleable navigation panel.
 - **Hierarchical Navigation**: Systems → Projects → Detailed Component Events.
+- **Deep Linking**: 
+    - URL Hash support (e.g., `/#SystemName/ProjectName`) allows bookmarking and sharing specific views.
+    - Browser refresh now persists the current view.
+- **Keyboard Navigation**:
+    - Use **Up/Down Arrow** keys to quickly cycle between Systems in the overview.
 
 ### 2. **Real-Time & Responsive**
 - **Live Updates**: SignalR pushes state changes instantly to all connected clients.
@@ -62,6 +67,7 @@ A production-ready IT infrastructure monitoring system with:
 - **Admin Portal**: Dedicated `/admin` route for data management.
 - **Data Cleanup**:
     - Delete entire systems, specific projects, or bulk-select individual components.
+    - **Protected Actions**: The "Actions" column (delete buttons) is hidden from standard view and only visible in Admin mode.
     - Protected from accidental deletion in the main view.
 
 ## 🔄 How It Works
