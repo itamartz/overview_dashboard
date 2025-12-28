@@ -339,6 +339,17 @@
                 <div class="table-header-bar">
                     <h3>@pagedResult.TotalCount Components</h3>
                     <div class="header-controls">
+                        <div class="page-size-selector" style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 0.85rem; color: #666;">Show:</span>
+                            <select @bind="PageSize" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #dfe6e9; font-size: 0.85rem;">
+                                <option value="15">15</option>
+                                <option value="30">30</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+
                         @if (pagedResult.TotalPages > 1)
                         {
                             <div class="pagination-inline">
@@ -355,7 +366,7 @@
 
                                 <button @onclick="NextPage" disabled="@(currentPage >= pagedResult.TotalPages)" title="Next page">»</button>
                                 <button @onclick="LastPage" disabled="@(currentPage >= pagedResult.TotalPages)" title="Last page">»»</button>
-
+                                
                                 <span class="page-info">Page @currentPage / @pagedResult.TotalPages</span>
                             </div>
                         }
@@ -540,16 +551,27 @@
 
     // Pagination
     private int currentPage = 1;
-    private int pageSize = 100;
+    private int _pageSize = 15;
+    
+    public int PageSize
+    {
+        get => _pageSize;
+        set
+        {
+            if (_pageSize != value)
+            {
+                _pageSize = value;
+                currentPage = 1;
+                _ = LoadComponentsAsync();
+            }
+        }
+    }
 
     private System.Threading.Timer? _refreshTimer;
     private CancellationTokenSource? _searchCts;
 
     protected override async Task OnInitializedAsync()
     {
-        // Read PageSize from configuration
-        pageSize = Configuration.GetValue<int>("Dashboard:PageSize", 100);
-
         await LoadSummaries();
         StateService.OnChange += OnStateChanged;
 
@@ -609,7 +631,7 @@
         var headersTask = DataService.GetDynamicHeadersAsync(selectedSystem, selectedProject);
         var dataTask = DataService.GetComponentsPagedAsync(
             selectedSystem, selectedProject, activeFilter, searchText,
-            currentPage, pageSize, sortColumn, sortAscending);
+            currentPage, _pageSize, sortColumn, sortAscending);
 
         await Task.WhenAll(severityTask, headersTask, dataTask);
 
