@@ -74,8 +74,16 @@
     .severity-block-ok .severity-block-header::before { content: '✓'; }
     .severity-block-info .severity-block-header::before { content: 'ⓘ'; }
     .severity-icon { font-size: 1.5rem; z-index: 1; }
-    .severity-title { font-weight: 600; flex: 1; z-index: 1; }
-    .severity-count { font-size: 0.9rem; opacity: 0.9; z-index: 1; }
+    .severity-title { font-weight: 600; flex: 1; z-index: 1; font-size: 1.2rem; }
+    .severity-count { 
+        font-size: 2.5rem; 
+        font-weight: 800; 
+        opacity: 1; 
+        z-index: 1; 
+        line-height: 1; 
+        margin-right: 10px;
+        color: white !important;
+    }
     .severity-block-content { 
         background: #fff; 
         padding: 0.25rem 0; 
@@ -460,7 +468,7 @@
                             <div class="severity-block-header">
                                 <span class="severity-icon">@severityIcons[severity]</span>
                                 <span class="severity-title">@severityLabels[severity]</span>
-                                <span class="severity-count">@totalCount components</span>
+                                <span class="severity-count">@totalCount</span>
                                 <button class="collapse-toggle" @onclick="() => ToggleSeverity(severity)">
                                     @(collapsedSeverities.GetValueOrDefault(severity, false) ? "▼" : "▲")
                                 </button>
