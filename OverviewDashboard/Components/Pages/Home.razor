@@ -115,12 +115,13 @@
     .table-scroll-container {
         border: 1px solid #ddd;
         border-radius: 8px;
-        overflow: hidden;
+        overflow-x: auto;
     }
     .table-scroll-container table {
         border-collapse: separate;
         border-spacing: 0;
-        width: 100%;
+        width: max-content;
+        min-width: 100%;
     }
     .table-scroll-container thead th {
         position: sticky;
@@ -129,6 +130,14 @@
         color: white;
         z-index: 10;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        white-space: nowrap;
+        padding: 0.75rem 1rem;
+    }
+    
+    .table-scroll-container td {
+        white-space: nowrap;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #efefef;
     }
 
     /* Header with pagination inline */
