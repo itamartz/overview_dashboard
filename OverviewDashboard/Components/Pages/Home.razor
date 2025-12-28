@@ -23,10 +23,16 @@
     }
     .health-summary {
         padding: 1rem;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
+        column-count: 2;
+        column-gap: 1rem;
     }
+    
+    @@media (max-width: 768px) {
+        .health-summary {
+            column-count: 1;
+        }
+    }
+
     .clickable-row {
         cursor: pointer;
         transition: background-color 0.2s;
@@ -35,11 +41,12 @@
         background-color: rgba(52, 152, 219, 0.1);
     }
     .severity-block {
-        flex: 0 0 calc(50% - 0.5rem);
-        margin-bottom: 0.5rem;
+        break-inside: avoid;
+        margin-bottom: 1rem;
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        background: white; /* Ensure visibility */
     }
     .severity-block-header {
         display: flex;
@@ -69,7 +76,12 @@
     .severity-icon { font-size: 1.5rem; z-index: 1; }
     .severity-title { font-weight: 600; flex: 1; z-index: 1; }
     .severity-count { font-size: 0.9rem; opacity: 0.9; z-index: 1; }
-    .severity-block-content { background: #fff; padding: 0.25rem 0; }
+    .severity-block-content { 
+        background: #fff; 
+        padding: 0.25rem 0; 
+        max-height: 400px;
+        overflow-y: auto;
+    }
     .severity-item {
         display: flex;
         align-items: center;
@@ -169,6 +181,31 @@
         color: white;
         border-color: #3498db;
     }
+    
+    .collapse-toggle {
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+        font-size: 0.8rem;
+        padding: 4px;
+        opacity: 0.8;
+        z-index: 2;
+        transition: opacity 0.2s;
+    }
+    .collapse-toggle:hover { opacity: 1; }
+    
+    .severity-more {
+        text-align: center;
+        padding: 0.5rem;
+        color: #666;
+        font-size: 0.85rem;
+        font-style: italic;
+        cursor: pointer;
+        background: #f9f9f9;
+        border-top: 1px solid #f0f0f0;
+    }
+    .severity-more:hover { background: #eee; }
 </style>
 
 <div class="dashboard-container">
@@ -413,15 +450,45 @@
                                 <span class="severity-icon">@severityIcons[severity]</span>
                                 <span class="severity-title">@severityLabels[severity]</span>
                                 <span class="severity-count">@totalCount components</span>
+                                <button class="collapse-toggle" @onclick="() => ToggleSeverity(severity)">
+                                    @(collapsedSeverities.GetValueOrDefault(severity, false) ? "▼" : "▲")
+                                </button>
                             </div>
-                            <div class="severity-block-content">
-                                @foreach (var item in itemsWithSeverity.OrderBy(x => x.SystemName).ThenBy(x => x.ProjectName))
+                            <div class="severity-block-content" style="@(collapsedSeverities.GetValueOrDefault(severity, false) ? "max-height: none; overflow: visible;" : "")">
+                                @{
+                                    IEnumerable<SystemProjectSummary> displayItems = itemsWithSeverity;
+                                    
+                                    if (collapsedSeverities.GetValueOrDefault(severity, false))
+                                    {
+                                        // When collapsed: Sort by count desc, Take 5
+                                        displayItems = itemsWithSeverity
+                                            .OrderByDescending(x => countSelector(x))
+                                            .Take(5);
+                                    }
+                                    else
+                                    {
+                                        // When expanded: Sort by count desc (same as collapsed), then Name
+                                        displayItems = itemsWithSeverity
+                                            .OrderByDescending(x => countSelector(x))
+                                            .ThenBy(x => x.SystemName)
+                                            .ThenBy(x => x.ProjectName);
+                                    }
+                                }
+
+                                @foreach (var item in displayItems)
                                 {
                                     <div class="severity-item clickable-row" @onclick="() => SelectProjectWithFilter(item.SystemName, item.ProjectName, severity)">
                                         <span class="item-system">@item.SystemName</span>
                                         <span class="item-separator">›</span>
                                         <span class="item-project">@item.ProjectName</span>
                                         <span class="item-count">@countSelector(item)</span>
+                                    </div>
+                                }
+                                
+                                @if (collapsedSeverities.GetValueOrDefault(severity, false) && itemsWithSeverity.Count > 5)
+                                {
+                                    <div class="severity-more" @onclick="() => ToggleSeverity(severity)">
+                                        + @(itemsWithSeverity.Count - 5) more...
                                     </div>
                                 }
                             </div>
@@ -444,6 +511,20 @@
     private PagedResult<ComponentViewModel> pagedResult = new();
     private SeverityCounts severityCounts = new();
     private List<string> dynamicHeaders = new();
+
+    private Dictionary<string, bool> collapsedSeverities = new Dictionary<string, bool>();
+
+    private void ToggleSeverity(string severity)
+    {
+        if (collapsedSeverities.ContainsKey(severity))
+        {
+            collapsedSeverities[severity] = !collapsedSeverities[severity];
+        }
+        else
+        {
+            collapsedSeverities[severity] = true;
+        }
+    }
 
     private string? selectedSystem;
     private string? selectedProject;
@@ -509,6 +590,14 @@
     private async Task LoadSummaries()
     {
         summaries = await DataService.GetSystemProjectSummariesAsync();
+        
+        // Default to collapsed for any new severities seen (if dictionary empty)
+        if (!collapsedSeverities.Any())
+        {
+            var severities = new[] { "error", "warning", "offline", "ok", "info" };
+            foreach (var s in severities) collapsedSeverities[s] = true;
+        }
+
         isLoadingSummaries = false;
     }
 
