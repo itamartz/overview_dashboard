@@ -17,6 +17,43 @@ namespace OverviewDashboard.Services
             _staleThreshold = TimeSpan.FromMinutes(minutes);
         }
 
+        private string GetSeverityFromPayload(string payload, DateTime createdAt, TimeSpan defaultStaleThreshold)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(payload);
+                var root = doc.RootElement;
+                
+                // Check if Custom TTL is defined in payload (in seconds)
+                if (root.TryGetProperty("TTL", out var ttlProp) && ttlProp.TryGetInt32(out int ttlSeconds))
+                {
+                    var customThreshold = TimeSpan.FromSeconds(ttlSeconds);
+                    if (createdAt < DateTime.UtcNow - customThreshold)
+                    {
+                        return "offline";
+                    }
+                }
+                else
+                {
+                    // Use default threshold
+                    if (createdAt < DateTime.UtcNow - defaultStaleThreshold)
+                    {
+                        return "offline";
+                    }
+                }
+
+                if (root.TryGetProperty("Severity", out var severityProp))
+                {
+                    return severityProp.GetString()?.ToLower() ?? "info";
+                }
+            }
+            catch { }
+            
+            // Fallback for parsing failure or missing properties
+            if (createdAt < DateTime.UtcNow - defaultStaleThreshold) return "offline";
+            return "info";
+        }
+
         /// <summary>
         /// Get summary counts for navigation panel - efficient database query
         /// </summary>
@@ -39,11 +76,11 @@ namespace OverviewDashboard.Services
                 {
                     SystemName = g.Key.SystemName,
                     ProjectName = g.Key.ProjectName,
-                    ErrorCount = g.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime) == "error"),
-                    WarningCount = g.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime) == "warning"),
-                    OfflineCount = g.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime) == "offline"),
-                    OkCount = g.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime) == "ok"),
-                    InfoCount = g.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime) == "info"),
+                    ErrorCount = g.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold) == "error"),
+                    WarningCount = g.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold) == "warning"),
+                    OfflineCount = g.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold) == "offline"),
+                    OkCount = g.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold) == "ok"),
+                    InfoCount = g.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold) == "info"),
                     TotalCount = g.Count()
                 })
                 .OrderBy(s => s.SystemName)
@@ -86,7 +123,7 @@ namespace OverviewDashboard.Services
                 CreatedAt = c.CreatedAt,
                 Payload = c.Payload,
                 ParsedPayload = ParsePayloadCached(c.Payload),
-                Severity = GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime)
+                Severity = GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold)
             }).ToList();
 
             // Apply severity filter
@@ -149,11 +186,11 @@ namespace OverviewDashboard.Services
 
             return new SeverityCounts
             {
-                Ok = components.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime) == "ok"),
-                Warning = components.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime) == "warning"),
-                Error = components.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime) == "error"),
-                Info = components.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime) == "info"),
-                Offline = components.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime) == "offline")
+                Ok = components.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold) == "ok"),
+                Warning = components.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold) == "warning"),
+                Error = components.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold) == "error"),
+                Info = components.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold) == "info"),
+                Offline = components.Count(c => GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold) == "offline")
             };
         }
 
@@ -184,6 +221,10 @@ namespace OverviewDashboard.Services
 
             var headerList = headers.OrderBy(h => h).ToList();
             headerList.Remove("Id");
+            
+            // Remove TTL from display headers (used for backend logic)
+            var ttlHeader = headerList.FirstOrDefault(h => h.Equals("TTL", StringComparison.OrdinalIgnoreCase));
+            if (ttlHeader != null) headerList.Remove(ttlHeader);
 
             // Prioritize Severity and Name
             var nameHeader = headerList.FirstOrDefault(h => h.Equals("name", StringComparison.OrdinalIgnoreCase));
@@ -213,7 +254,6 @@ namespace OverviewDashboard.Services
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-            var staleTime = DateTime.UtcNow - _staleThreshold;
 
             var query = db.Components
                 .Where(c => c.SystemName == systemName && c.ProjectName == projectName);
@@ -228,7 +268,7 @@ namespace OverviewDashboard.Services
                 CreatedAt = c.CreatedAt,
                 Payload = c.Payload,
                 ParsedPayload = ParsePayloadCached(c.Payload),
-                Severity = GetSeverityFromPayload(c.Payload, c.CreatedAt, staleTime)
+                Severity = GetSeverityFromPayload(c.Payload, c.CreatedAt, _staleThreshold)
             }).ToList();
 
             if (!string.IsNullOrEmpty(severityFilter))
@@ -274,21 +314,7 @@ namespace OverviewDashboard.Services
             }
         }
 
-        private static string GetSeverityFromPayload(string payload, DateTime createdAt, DateTime staleTime)
-        {
-            if (createdAt < staleTime) return "offline";
 
-            try
-            {
-                using var doc = JsonDocument.Parse(payload);
-                if (doc.RootElement.TryGetProperty("Severity", out var severityProp))
-                {
-                    return severityProp.GetString()?.ToLower() ?? "info";
-                }
-            }
-            catch { }
-            return "info";
-        }
 
         private static Dictionary<string, object> ParsePayloadCached(string json)
         {

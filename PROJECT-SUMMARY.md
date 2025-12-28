@@ -27,28 +27,48 @@ A production-ready IT infrastructure monitoring system with:
 
 ## 🎯 Key Features
 
-### 1. **Real-Time Dashboard**
-- Live updates via SignalR (no page refresh)
-- Hierarchical data display (Systems → Projects → Components)
-- Color-coded status indicators (good, warning, error, info)
-- Responsive design with modern UI
+### 1. **Data Visualization & Layout**
+- **Masonry "Pinterest-Style" Layout**: 
+    - **System View**: Visual summary of all projects, grouped by severity (Errors, Warnings, etc.).
+    - **Dynamic Sorting**: Projects automatically prioritized by severity count.
+- **Detailed Project View**:
+    - **Tabular Data**: Full searchable and sortable table logic for deep-diving into component history.
+    - **Pagination**: Efficiently browse thousands of events.
+- **Hierarchical Navigation**: Systems → Projects → Detailed Component Events.
 
-### 2. **REST API**
-- Built with ASP.NET Core
-- Swagger/OpenAPI documentation at `/swagger`
-- Full CRUD operations for components
-- JSON payload support for flexible data structures
+### 2. **Real-Time & Responsive**
+- **Live Updates**: SignalR pushes state changes instantly to all connected clients.
+- **Dynamic TTL (Time-To-Live)**: 
+    - Components can specify their own "Offline" timeout (e.g., 30s heartbeat vs. 1h job).
+    - Auto-detection of stale/offline agents.
+- **Status Monitoring**: OK, Warning, Error, Info, and Offline statuses.
 
-### 3. **Database**
-- SQLite for simplicity (file-based, no server needed)
-- Entity Framework Core with automatic migrations
-- Seeded with sample data for testing
-- Easy to migrate to SQL Server/PostgreSQL if needed
+### 3. **REST API**
+- **Flexible Payload**: Accepts any JSON structure; key monitoring fields (`Severity`, `Name`, `TTL`) are auto-extracted.
+- **Swagger/OpenAPI**: Built-in documentation at `/swagger`.
+- **PowerShell Integration**: Scripts provided for easy agent integration.
 
-### 4. **Deployment Options**
-- **Docker (Primary):** Automated via GitHub Actions
-- **Windows Service:** Traditional Windows deployment
-- Self-contained or framework-dependent builds
+### 4. **Database & Backend**
+- **SQLite**: Zero-configuration, file-based storage.
+- **Entity Framework Core**: Robust data access.
+- **Docker Ready**: Full container support for easy deployment.
+
+## 🔄 How It Works
+
+1. **Data Collection**: Agents/Scripts send POST requests to `/api/components` with a `systemName`, `projectName`, and JSON `payload`.
+2. **Dynamic Processing**:
+   - The system extracts the `Severity` and optional `TTL` from the payload.
+   - It updates or creates the component record.
+3. **Visualization**:
+   - **System Summary**: Shows a bird's-eye view of all projects using a responsive Cards layout.
+   - **User Action**: Clicking a project drills down into the **Project Detail View**.
+   - **Project Detail**: Users can search, filter (by severity), and page through all historical events for that project.
+4. **Clean-up**: Background services (and TTL logic) manage data freshness.
+
+### Deployment:
+- **Docker** - Containerization
+- **GitHub Actions** - CI/CD
+- **Windows Service** - Alternative deployment
 
 ---
 

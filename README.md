@@ -7,8 +7,10 @@ A real-time monitoring dashboard for IT infrastructure built with **Blazor Serve
 ## 🎯 Features
 
 - ✅ **Real-time Updates** - SignalR-based live dashboard without page refresh
+- ✅ **Dynamic Layouts** - Pinterest-style Masonry view for project overviews
 - ✅ **Hierarchical Navigation** - Systems → Projects → Components  
-- ✅ **Status Monitoring** - OK, Warning, Error, Info severity levels
+- ✅ **Status Monitoring** - OK, Warning, Error, Info, and **Offline** severity levels
+- ✅ **Heartbeat Monitoring** - Dynamic per-component TTL (Time-To-Live) support
 - ✅ **SQLite Database** - No external database server required
 - ✅ **Docker Deployment** - GitHub Actions workflow for GCP deployment
 - ✅ **Windows Service** - Can run as a Windows Service
@@ -177,14 +179,14 @@ Systems (e.g., "ActiveDirectory", "vCenter", "WSUS")
 ### Add New Component:
 
 ```powershell
-# Via API
+# Via API (with optional TTL)
 Invoke-RestMethod -Uri "http://localhost:5203/api/components" `
     -Method POST `
     -ContentType "application/json" `
     -Body '{
         "systemName": "MySystem",
         "projectName": "MyProject",
-        "payload": "{\"status\": \"ok\", \"value\": 100}"
+        "payload": "{\"Name\": \"HeartbeatService\", \"Severity\": \"ok\", \"TTL\": 30}"
     }'
 ```
 

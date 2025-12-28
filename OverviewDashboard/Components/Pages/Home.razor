@@ -298,9 +298,9 @@
             <p>@contentSubtitle</p>
         </div>
 
-        @if (selectedProject != null && selectedSystem != null)
+        @if (selectedProject != null)
         {
-            <!-- Summary Cards -->
+            <!-- Project Detail View: Summary Cards + Table -->
             <div class="cards-container">
                 <div class="summary-card card-ok @(activeFilter == "ok" ? "active-filter" : "")" @onclick='() => FilterBySeverity("ok")'>
                     <div class="card-icon-bg">✓</div>
@@ -431,20 +431,13 @@
         }
         else if (summaries.Any())
         {
-            @* System Health Summary View *@
+            @* System/Global Health Summary View *@
             <div class="health-summary">
                 @{
-                    var severityOrder = new[] { "error", "warning", "offline", "ok", "info" };
-                    var severityLabels = new Dictionary<string, string>
-                    {
-                        { "error", "Error" }, { "warning", "Warning" }, { "offline", "Offline" },
-                        { "ok", "OK" }, { "info", "Info" }
-                    };
-                    var severityIcons = new Dictionary<string, string>
-                    {
-                        { "error", "✕" }, { "warning", "⚠" }, { "offline", "?" },
-                        { "ok", "✓" }, { "info", "ⓘ" }
-                    };
+                    // Filter summaries based on selectedSystem
+                    var displaySummaries = selectedSystem == null 
+                        ? summaries 
+                        : summaries.Where(s => s.SystemName == selectedSystem).ToList();
                 }
 
                 @foreach (var severity in severityOrder)
@@ -459,7 +452,7 @@
                         _ => s => 0
                     };
 
-                    var itemsWithSeverity = summaries.Where(s => countSelector(s) > 0).ToList();
+                    var itemsWithSeverity = displaySummaries.Where(s => countSelector(s) > 0).ToList();
                     var totalCount = itemsWithSeverity.Sum(countSelector);
 
                     if (totalCount > 0)
@@ -631,12 +624,31 @@
         isLoadingSummaries = false;
     }
 
+    private string[] severityOrder = new[] { "error", "warning", "offline", "ok", "info" };
+    
+    private Dictionary<string, string> severityLabels = new Dictionary<string, string>
+    {
+        { "error", "Error" }, { "warning", "Warning" }, { "offline", "Offline" },
+        { "ok", "OK" }, { "info", "Info" }
+    };
+    
+    private Dictionary<string, string> severityIcons = new Dictionary<string, string>
+    {
+        { "error", "✕" }, { "warning", "⚠" }, { "offline", "?" },
+        { "ok", "✓" }, { "info", "ⓘ" }
+    };
+
+    private List<ComponentViewModel> projectComponents = new();
+
     private async Task LoadComponentsAsync()
     {
         if (selectedSystem == null || selectedProject == null) return;
 
+        // Fetch severity counts
         var severityTask = DataService.GetSeverityCountsAsync(selectedSystem, selectedProject);
         var headersTask = DataService.GetDynamicHeadersAsync(selectedSystem, selectedProject);
+        
+        // Fetch Paged components
         var dataTask = DataService.GetComponentsPagedAsync(
             selectedSystem, selectedProject, activeFilter, searchText,
             currentPage, _pageSize, sortColumn, sortAscending);
@@ -716,11 +728,13 @@
     private async Task SelectSystem(string systemName)
     {
         selectedSystem = systemName;
-        var firstProject = summaries.FirstOrDefault(s => s.SystemName == systemName);
-        if (firstProject != null)
-        {
-            await SelectProject(systemName, firstProject.ProjectName);
-        }
+        selectedProject = null;
+        activeFilter = null;
+        contentTitle = systemName;
+        contentSubtitle = "System Overview";
+        
+        // Refresh summaries to apply filtering if needed (handled in UI logic)
+        await LoadSummaries();
     }
 
     private async Task SelectProject(string systemName, string projectName, bool resetFilters = true)
