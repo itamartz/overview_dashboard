@@ -116,6 +116,8 @@
         border: 1px solid #ddd;
         border-radius: 8px;
         overflow-x: auto;
+        overflow-y: auto;
+        max-height: calc(100vh - 350px); /* Adjust based on header/summary height */
     }
     .table-scroll-container table {
         border-collapse: separate;
@@ -226,11 +228,37 @@
         border-top: 1px solid #f0f0f0;
     }
     .severity-more:hover { background: #eee; }
+
+    .nav-panel {
+        transition: width 0.3s ease, min-width 0.3s ease;
+    }
+    .nav-panel.closed {
+        width: 0 !important;
+        min-width: 0 !important;
+        overflow: hidden;
+    }
+    .sidebar-toggle-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        margin-right: 15px;
+        color: #2c3e50;
+        padding: 5px;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .sidebar-toggle-btn:hover {
+        background-color: rgba(0,0,0,0.05);
+    }
 </style>
 
 <div class="dashboard-container">
     <!-- Left Navigation Panel -->
-    <div class="nav-panel">
+    <div class="nav-panel @(isSidebarOpen ? "" : "closed")">
         <div class="nav-header">
             <h2 class="nav-title-link" @onclick="GoHome" title="Return to overview">
                 <span style="
@@ -318,8 +346,15 @@
     <!-- Right Content Area -->
     <div class="content-area">
         <div class="content-header">
-            <h1>@contentTitle</h1>
-            <p>@contentSubtitle</p>
+            <div style="display: flex; align-items: flex-start;">
+                <button class="sidebar-toggle-btn" @onclick="ToggleSidebar" title="@(isSidebarOpen ? "Close Sidebar" : "Open Sidebar")">
+                    ☰
+                </button>
+                <div>
+                    <h1>@contentTitle</h1>
+                    <p>@contentSubtitle</p>
+                </div>
+            </div>
         </div>
 
         @if (selectedProject != null)
@@ -640,6 +675,13 @@
                  await LoadSummaries();
              }
          }
+    }
+
+    private bool isSidebarOpen = true;
+
+    private void ToggleSidebar()
+    {
+        isSidebarOpen = !isSidebarOpen;
     }
 
     private Dictionary<string, bool> collapsedSeverities = new Dictionary<string, bool>();

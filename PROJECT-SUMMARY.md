@@ -33,7 +33,12 @@ A production-ready IT infrastructure monitoring system with:
     - **Dynamic Sorting**: Projects automatically prioritized by severity count.
 - **Detailed Project View**:
     - **Tabular Data**: Full searchable and sortable table logic for deep-diving into component history.
+    - **Tabular Data**: Full searchable and sortable table logic for deep-diving into component history.
+    - **Smart Scrolling**: 
+        - **Fixed Headers**: Table headers stay visible while scrolling vertically.
+        - **Horizontal Scroll**: Tables automatically handle large numbers of columns without breaking layout.
     - **Pagination**: Efficiently browse thousands of events.
+    - **Collapsible Sidebar**: Maximize screen real estate for data analysis with a toggleable navigation panel.
 - **Hierarchical Navigation**: Systems → Projects → Detailed Component Events.
 
 ### 2. **Real-Time & Responsive**

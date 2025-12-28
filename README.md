@@ -8,6 +8,7 @@ A real-time monitoring dashboard for IT infrastructure built with **Blazor Serve
 
 - ✅ **Real-time Updates** - SignalR-based live dashboard without page refresh
 - ✅ **Dynamic Layouts** - Pinterest-style Masonry view for project overviews
+- ✅ **Responsive UI** - Collapsible sidebar and scrollable data tables (horizontal & vertical)
 - ✅ **Hierarchical Navigation** - Systems → Projects → Components  
 - ✅ **Status Monitoring** - OK, Warning, Error, Info, and **Offline** severity levels
 - ✅ **Heartbeat Monitoring** - Dynamic per-component TTL (Time-To-Live) support
