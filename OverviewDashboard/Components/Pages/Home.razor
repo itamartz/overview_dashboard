@@ -1,4 +1,5 @@
 @page "/"
+@page "/admin"
 @using Microsoft.EntityFrameworkCore
 @using OverviewDashboard.Data
 @using OverviewDashboard.Models
@@ -7,6 +8,8 @@
 @inject DashboardDataService DataService
 @inject DashboardStateService StateService
 @inject IConfiguration Configuration
+@inject NavigationManager NavManager
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 
@@ -246,20 +249,26 @@
                     var systemOffline = systemGroup.Sum(s => s.OfflineCount);
 
                     <div class="nav-item @(isSystemSelected ? "active" : "")" @onclick="() => SelectSystem(systemName)">
-                        <span class="nav-item-name">@systemName</span>
-                        <div style="display: flex; gap: 5px; align-items: center;">
-                            @if (systemErrors > 0)
-                            {
-                                <span class="nav-item-badge badge-error">@systemErrors</span>
-                            }
-                            @if (systemWarnings > 0)
-                            {
-                                <span class="nav-item-badge badge-warning">@systemWarnings</span>
-                            }
-                            @if (systemOffline > 0)
-                            {
-                                <span class="nav-item-badge badge-offline">@systemOffline</span>
-                            }
+                        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                            <span class="nav-item-name">@systemName</span>
+                            <div style="display: flex; gap: 5px; align-items: center;">
+                                @if (IsAdmin)
+                                {
+                                    <button class="delete-btn-small" @onclick:stopPropagation @onclick="() => DeleteSystem(systemName)" title="Delete System">🗑️</button>
+                                }
+                                @if (systemErrors > 0)
+                                {
+                                    <span class="nav-item-badge badge-error">@systemErrors</span>
+                                }
+                                @if (systemWarnings > 0)
+                                {
+                                    <span class="nav-item-badge badge-warning">@systemWarnings</span>
+                                }
+                                @if (systemOffline > 0)
+                                {
+                                    <span class="nav-item-badge badge-offline">@systemOffline</span>
+                                }
+                            </div>
                         </div>
                     </div>
 
@@ -268,23 +277,29 @@
                         @foreach (var project in systemGroup.OrderBy(p => p.ProjectName))
                         {
                             var isProjectSelected = selectedProject == project.ProjectName;
-                            <div class="nav-subitem @(isProjectSelected ? "active" : "")" @onclick="() => SelectProject(systemName, project.ProjectName)">
-                                <span>@project.ProjectName</span>
-                                <div style="display: flex; gap: 5px; align-items: center;">
-                                    @if (project.ErrorCount > 0)
-                                    {
-                                        <span class="nav-item-badge badge-error">@project.ErrorCount</span>
-                                    }
-                                    @if (project.WarningCount > 0)
-                                    {
-                                        <span class="nav-item-badge badge-warning">@project.WarningCount</span>
-                                    }
-                                    @if (project.OfflineCount > 0)
-                                    {
-                                        <span class="nav-item-badge badge-offline">@project.OfflineCount</span>
-                                    }
+                                <div class="nav-subitem @(isProjectSelected ? "active" : "")" @onclick="() => SelectProject(systemName, project.ProjectName)">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                                        <span style="overflow: hidden; text-overflow: ellipsis;">@project.ProjectName</span>
+                                        <div style="display: flex; gap: 5px; align-items: center;">
+                                            @if (IsAdmin)
+                                            {
+                                                <button class="delete-btn-small" @onclick:stopPropagation @onclick="() => DeleteProject(systemName, project.ProjectName)" title="Delete Project">🗑️</button>
+                                            }
+                                            @if (project.ErrorCount > 0)
+                                            {
+                                                <span class="nav-item-badge badge-error">@project.ErrorCount</span>
+                                            }
+                                            @if (project.WarningCount > 0)
+                                            {
+                                                <span class="nav-item-badge badge-warning">@project.WarningCount</span>
+                                            }
+                                            @if (project.OfflineCount > 0)
+                                            {
+                                                <span class="nav-item-badge badge-offline">@project.OfflineCount</span>
+                                            }
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
                         }
                     }
                 }
@@ -340,6 +355,10 @@
                 .card-offline.active-filter { box-shadow: 0 0 15px rgba(108, 117, 125, 0.6); }
                 .search-box { padding: 8px 12px; border: 1px solid #dfe6e9; border-radius: 5px; width: 250px; font-size: 14px; outline: none; transition: border-color 0.3s; }
                 .search-box:focus { border-color: #3498db; }
+                .delete-btn-small { background: none; border: none; cursor: pointer; font-size: 0.9rem; padding: 2px 5px; opacity: 0.7; transition: opacity 0.2s; }
+                .delete-btn-small:hover { opacity: 1; transform: scale(1.1); }
+                .bulk-delete-btn { background-color: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; transition: background 0.2s; }
+                .bulk-delete-btn:hover { background-color: #c82333; }
             </style>
 
             <!-- Data Table with Pagination -->
@@ -357,6 +376,11 @@
                                 <option value="200">200</option>
                             </select>
                         </div>
+
+                        @if (IsAdmin && selectedComponentIds.Any())
+                        {
+                            <button class="bulk-delete-btn" @onclick="DeleteSelectedComponents">Delete Selected (@selectedComponentIds.Count)</button>
+                        }
 
                         @if (pagedResult.TotalPages > 1)
                         {
@@ -386,6 +410,12 @@
                     <table class="data-table">
                         <thead>
                             <tr>
+                                @if (IsAdmin)
+                                {
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" @onchange="ToggleSelectAll" checked="@(pagedResult.Items.Any() && pagedResult.Items.All(i => selectedComponentIds.Contains(i.Id)))" />
+                                    </th>
+                                }
                                 <th @onclick='() => SortBy("CreatedAt")' style="cursor: pointer;">
                                     Created At @GetSortIndicator("CreatedAt")
                                 </th>
@@ -402,6 +432,12 @@
                             @foreach (var component in pagedResult.Items)
                             {
                                 <tr>
+                                    @if (IsAdmin)
+                                    {
+                                        <td>
+                                            <input type="checkbox" checked="@(selectedComponentIds.Contains(component.Id))" @onchange="@(() => ToggleSelection(component.Id))" />
+                                        </td>
+                                    }
                                     <td class="timestamp-cell">@GetRelativeTime(component.CreatedAt)</td>
                                     @foreach (var header in dynamicHeaders)
                                     {
@@ -420,7 +456,10 @@
                                         </td>
                                     }
                                     <td>
-                                        <button class="delete-btn" @onclick="() => DeleteComponent(component.Id)">🗑️</button>
+                                        @if (IsAdmin)
+                                        {
+                                            <button class="delete-btn" @onclick="() => DeleteComponent(component.Id)">🗑️</button>
+                                        }
                                     </td>
                                 </tr>
                             }
@@ -523,6 +562,76 @@
     private PagedResult<ComponentViewModel> pagedResult = new();
     private SeverityCounts severityCounts = new();
     private List<string> dynamicHeaders = new();
+    private bool IsAdmin => NavManager.Uri.Contains("/admin", StringComparison.OrdinalIgnoreCase);
+    private HashSet<int> selectedComponentIds = new();
+
+    private void ToggleSelection(int id)
+    {
+        if (selectedComponentIds.Contains(id))
+            selectedComponentIds.Remove(id);
+        else
+            selectedComponentIds.Add(id);
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        if (e.Value is bool isChecked && isChecked)
+        {
+            foreach (var item in pagedResult.Items)
+            {
+                selectedComponentIds.Add(item.Id);
+            }
+        }
+        else
+        {
+            foreach (var item in pagedResult.Items)
+            {
+                selectedComponentIds.Remove(item.Id);
+            }
+        }
+    }
+
+    private async Task DeleteSelectedComponents()
+    {
+        if (!selectedComponentIds.Any()) return;
+        
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete selected components?");
+        if (confirmed) {
+             await DataService.DeleteComponentsAsync(selectedComponentIds.ToList());
+             selectedComponentIds.Clear();
+             await LoadSummaries();
+             await LoadComponentsAsync();
+        }
+    }
+
+    private async Task DeleteProject(string systemName, string projectName)
+    {
+         bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete project '{projectName}' and all its components?");
+         if (confirmed) {
+             await DataService.DeleteProjectAsync(systemName, projectName);
+             if (selectedSystem == systemName && selectedProject == projectName) {
+                 GoHome();
+             }
+             else {
+                 // Refresh list if not currently selected
+                 await LoadSummaries();
+             }
+         }
+    }
+
+    private async Task DeleteSystem(string systemName)
+    {
+         bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to DELETE THE ENTIRE SYSTEM '{systemName}' and all its projects/components?");
+         if (confirmed) {
+             await DataService.DeleteSystemAsync(systemName);
+             if (selectedSystem == systemName) {
+                 GoHome();
+             }
+             else {
+                 await LoadSummaries();
+             }
+         }
+    }
 
     private Dictionary<string, bool> collapsedSeverities = new Dictionary<string, bool>();
 
@@ -723,6 +832,7 @@
         contentTitle = "System Overview";
         contentSubtitle = "Overall system health summary";
         pagedResult = new();
+        selectedComponentIds.Clear();
     }
 
     private async Task SelectSystem(string systemName)
@@ -750,6 +860,7 @@
             searchText = "";
             sortColumn = null;
             currentPage = 1;
+            selectedComponentIds.Clear();
         }
 
         await LoadComponentsAsync();
@@ -764,6 +875,7 @@
         currentPage = 1;
         contentTitle = $"{systemName} - {projectName}";
         contentSubtitle = "Project Details";
+        selectedComponentIds.Clear();
 
         await LoadComponentsAsync();
     }

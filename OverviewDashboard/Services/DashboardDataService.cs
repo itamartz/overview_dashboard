@@ -314,6 +314,51 @@ namespace OverviewDashboard.Services
             }
         }
 
+        public async Task DeleteProjectAsync(string systemName, string projectName)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+            var components = await db.Components
+                .Where(c => c.SystemName == systemName && c.ProjectName == projectName)
+                .ToListAsync();
+
+            if (components.Any())
+            {
+                db.Components.RemoveRange(components);
+                await db.SaveChangesAsync();
+            }
+        }
+
+        public async Task DeleteComponentsAsync(IEnumerable<int> ids)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+            var components = await db.Components
+                .Where(c => ids.Contains(c.Id))
+                .ToListAsync();
+
+            if (components.Any())
+            {
+                db.Components.RemoveRange(components);
+                await db.SaveChangesAsync();
+            }
+        }
+
+        public async Task DeleteSystemAsync(string systemName)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+            var components = await db.Components
+                .Where(c => c.SystemName == systemName)
+                .ToListAsync();
+
+            if (components.Any())
+            {
+                db.Components.RemoveRange(components);
+                await db.SaveChangesAsync();
+            }
+        }
+
 
 
         private static Dictionary<string, object> ParsePayloadCached(string json)

@@ -53,6 +53,12 @@ A production-ready IT infrastructure monitoring system with:
 - **Entity Framework Core**: Robust data access.
 - **Docker Ready**: Full container support for easy deployment.
 
+### 5. **Administrative Tools**
+- **Admin Portal**: Dedicated `/admin` route for data management.
+- **Data Cleanup**:
+    - Delete entire systems, specific projects, or bulk-select individual components.
+    - Protected from accidental deletion in the main view.
+
 ## 🔄 How It Works
 
 1. **Data Collection**: Agents/Scripts send POST requests to `/api/components` with a `systemName`, `projectName`, and JSON `payload`.

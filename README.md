@@ -15,6 +15,7 @@ A real-time monitoring dashboard for IT infrastructure built with **Blazor Serve
 - ✅ **Docker Deployment** - GitHub Actions workflow for GCP deployment
 - ✅ **Windows Service** - Can run as a Windows Service
 - ✅ **REST API** - Built-in API with Swagger documentation
+- ✅ **Admin Controls** - Dedicated `/admin` interface for managing data
 - ✅ **Zero JavaScript** - Pure C# Blazor application
 
 ## 📋 Prerequisites
@@ -79,6 +80,7 @@ Navigate to the URL shown in the console (typically `http://localhost:5203`)
 ### 3. Access the Dashboard
 
 - **Dashboard:** `http://localhost:5203`
+- **Admin Panel:** `http://localhost:5203/admin`
 - **API Endpoints:** `http://localhost:5203/api/*`
 - **Swagger UI:** `http://localhost:5203/swagger`
 
@@ -244,6 +246,12 @@ For issues or questions:
 - **HTTPS:** Configure SSL certificates
 - **Database:** Protect database file with appropriate permissions
 - **Secrets:** Use GitHub Secrets for sensitive configuration
+
+## 🛡️ Administration
+- Access the admin panel at `/admin`
+- **Delete Systems:** Remove entire systems and all their data
+- **Delete Projects:** Remove specific projects
+- **Bulk Delete:** Select and remove multiple components at once
 
 ---
 
