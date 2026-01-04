@@ -11,7 +11,7 @@ A real-time monitoring dashboard for IT infrastructure built with **Blazor Serve
 - ✅ **Responsive UI** - Collapsible sidebar and scrollable data tables (horizontal & vertical)
 - ✅ **Deep Linking** - Shareable URLs via hash fragments (e.g., `/#System/Project`)
 - ✅ **Hierarchical Navigation** - Systems → Projects → Components  
-- ✅ **Keyboard Shortcuts** - Navigate systems using Up/Down arrow keys
+- ✅ **Keyboard Shortcuts** - Navigate systems using Up/Down arrow keys, and pages/projects using Left/Right arrow keys
 - ✅ **Status Monitoring** - OK, Warning, Error, Info, and **Offline** severity levels
 - ✅ **Heartbeat Monitoring** - Dynamic per-component TTL (Time-To-Live) support
 - ✅ **SQLite Database** - No external database server required

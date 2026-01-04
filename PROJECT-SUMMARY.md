@@ -44,7 +44,8 @@ A production-ready IT infrastructure monitoring system with:
     - URL Hash support (e.g., `/#SystemName/ProjectName`) allows bookmarking and sharing specific views.
     - Browser refresh now persists the current view.
 - **Keyboard Navigation**:
-    - Use **Up/Down Arrow** keys to quickly cycle between Systems in the overview.
+    - **Up/Down Arrow**: Cycle between Systems.
+    - **Left/Right Arrow**: Navigate between pages within a project, and automatically jump to the next/previous project when reaching the first/last page.
 
 ### 2. **Real-Time & Responsive**
 - **Live Updates**: SignalR pushes state changes instantly to all connected clients.

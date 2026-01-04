@@ -895,19 +895,27 @@
                 }
             }
         }
-        else if (selectedProject == null && selectedSystem != null && key == "ArrowRight")
+        else if (selectedProject == null && key == "ArrowRight")
         {
-             // If on System Overview, Right Arrow enters the first project of that system
-             var firstProject = summaries
-                .Where(s => s.SystemName == selectedSystem)
-                .OrderBy(s => s.ProjectName)
-                .Select(s => s.ProjectName)
-                .FirstOrDefault();
+             // If on Global Overview or System Overview, Right Arrow enters the first project available
+             // If selectedSystem is null, take first project of first system
+             // If selectedSystem is set, take first project of that system
              
-             if (firstProject != null) 
+             var targetSystem = selectedSystem ?? summaries.OrderBy(s => s.SystemName).Select(s => s.SystemName).FirstOrDefault();
+             
+             if (targetSystem != null)
              {
-                 await SelectProject(selectedSystem, firstProject);
-                 StateHasChanged();
+                 var firstProject = summaries
+                    .Where(s => s.SystemName == targetSystem)
+                    .OrderBy(s => s.ProjectName)
+                    .Select(s => s.ProjectName)
+                    .FirstOrDefault();
+                 
+                 if (firstProject != null) 
+                 {
+                     await SelectProject(targetSystem, firstProject);
+                     StateHasChanged();
+                 }
              }
         }
     }
@@ -946,6 +954,12 @@
 
         if (selectedSystem != sysName || selectedProject != projName)
         {
+            // Reset page if project changed
+            if (selectedProject != projName || selectedSystem != sysName) 
+            {
+                currentPage = 1;
+            }
+
             selectedSystem = sysName;
             selectedProject = projName;
 
