@@ -1,0 +1,159 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  # Windows Server 2022 base box
+  config.vm.box = "gusztavvargadr/windows-server-2022-standard"
+
+  config.vm.hostname = "overview-dashboard"
+
+  # Network configuration
+  config.vm.network "forwarded_port", guest: 5000, host: 5000
+  config.vm.network "private_network", ip: "192.168.56.10"
+
+  # WinRM configuration for Windows
+  config.vm.communicator = "winrm"
+  config.winrm.username = "vagrant"
+  config.winrm.password = "vagrant"
+  config.winrm.timeout = 1800
+  config.winrm.retry_limit = 20
+
+  # VM Provider settings - VMware Workstation
+  config.vm.provider "vmware_workstation" do |vmware|
+    vmware.vmx["displayName"] = "OverviewDashboard-Server2022"
+    vmware.vmx["memsize"] = "4096"
+    vmware.vmx["numvcpus"] = "2"
+    vmware.gui = true
+  end
+
+  # Set timezone to Jerusalem
+  config.vm.provision "shell", privileged: true, inline: <<-TIMEZONE
+    Write-Host "Setting timezone to Israel Standard Time (Jerusalem)..." -ForegroundColor Green
+    Set-TimeZone -Id "Israel Standard Time"
+    Write-Host "Timezone set to: $(Get-TimeZone).DisplayName"
+  TIMEZONE
+
+  # Upload the ZIP file
+  config.vm.provision "file",
+    source: "C:/Users/Itamartz/Downloads/OverviewDashboard-win-x64.zip",
+    destination: "C:/Temp/OverviewDashboard-win-x64.zip"
+
+  # PowerShell provisioning script
+  config.vm.provision "shell", privileged: true, inline: <<-SHELL
+    # Set error handling
+    $ErrorActionPreference = "Stop"
+
+    Write-Host "=== Setting up OverviewDashboard Service ===" -ForegroundColor Green
+
+    $serviceName = "OverviewDashboard"
+    $installPath = "C:\\OverviewDashboard"
+    $tempZip = "C:\\Temp\\OverviewDashboard-win-x64.zip"
+
+    # Stop and remove existing service to release file locks
+    $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($existingService) {
+        Write-Host "Stopping and removing existing service..."
+        Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+        sc.exe delete $serviceName | Out-Null
+        Start-Sleep -Seconds 3
+    }
+
+    # Kill any remaining processes
+    Write-Host "Killing any remaining processes..."
+    Get-Process -Name "OverviewDashboard" -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Seconds 2
+
+    Write-Host "Creating installation directory: $installPath"
+    if (Test-Path $installPath) {
+        # Try multiple times to remove the directory
+        $retries = 3
+        for ($i = 1; $i -le $retries; $i++) {
+            try {
+                Remove-Item -Path $installPath -Recurse -Force -ErrorAction Stop
+                break
+            } catch {
+                Write-Host "Retry $i/$retries - waiting for file locks to release..."
+                Start-Sleep -Seconds 3
+            }
+        }
+    }
+    New-Item -ItemType Directory -Path $installPath -Force | Out-Null
+
+    # Extract ZIP file
+    Write-Host "Extracting ZIP file..."
+    Expand-Archive -Path $tempZip -DestinationPath $installPath -Force
+
+    # Check if files are in a subdirectory and move them up if needed
+    $subDirs = Get-ChildItem -Path $installPath -Directory
+    if ($subDirs.Count -eq 1 -and (Test-Path "$($subDirs[0].FullName)\\OverviewDashboard.exe")) {
+        Write-Host "Moving files from subdirectory..."
+        Get-ChildItem -Path $subDirs[0].FullName | Move-Item -Destination $installPath -Force
+        Remove-Item -Path $subDirs[0].FullName -Force
+    }
+
+    $exePath = "$installPath\\OverviewDashboard.exe"
+
+    # Verify the executable exists
+    if (-not (Test-Path $exePath)) {
+        Write-Host "ERROR: OverviewDashboard.exe not found at $exePath" -ForegroundColor Red
+        Write-Host "Contents of $installPath :"
+        Get-ChildItem -Path $installPath -Recurse | Select-Object FullName
+        exit 1
+    }
+
+    Write-Host "Found executable: $exePath"
+
+    # Configure firewall rule
+    Write-Host "Configuring firewall..."
+    $firewallRule = Get-NetFirewallRule -DisplayName "OverviewDashboard" -ErrorAction SilentlyContinue
+    if ($firewallRule) {
+        Remove-NetFirewallRule -DisplayName "OverviewDashboard"
+    }
+    New-NetFirewallRule -DisplayName "OverviewDashboard" `
+        -Direction Inbound `
+        -Protocol TCP `
+        -LocalPort 5000 `
+        -Action Allow | Out-Null
+
+    # Create Logs directory
+    $logsPath = "$installPath\\Logs"
+    if (-not (Test-Path $logsPath)) {
+        New-Item -ItemType Directory -Path $logsPath -Force | Out-Null
+    }
+    Write-Host "Logs directory: $logsPath"
+
+    # Create the Windows Service with output redirection
+    Write-Host "Creating Windows Service..."
+    $logFile = "$logsPath\\app.log"
+    $binPath = "$exePath >> $logFile 2>&1"
+    New-Service -Name $serviceName `
+        -BinaryPathName $binPath `
+        -DisplayName "Overview Dashboard" `
+        -Description "Real-time IT Infrastructure Monitoring Dashboard" `
+        -StartupType Automatic | Out-Null
+
+    # Set service to restart on failure
+    Write-Host "Configuring service recovery options..."
+    sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/10000/restart/30000 | Out-Null
+
+    # Start the service
+    Write-Host "Starting service..."
+    Start-Service -Name $serviceName
+    Start-Sleep -Seconds 3
+
+    # Verify service status
+    $service = Get-Service -Name $serviceName
+    Write-Host "Service Status: $($service.Status)" -ForegroundColor $(if ($service.Status -eq 'Running') { 'Green' } else { 'Red' })
+
+    # Clean up temp file
+    Write-Host "Cleaning up..."
+    Remove-Item -Path $tempZip -Force -ErrorAction SilentlyContinue
+
+    Write-Host ""
+    Write-Host "=== Installation Complete ===" -ForegroundColor Green
+    Write-Host "Dashboard URL: http://localhost:5000"
+    Write-Host "API Swagger:   http://localhost:5000/swagger"
+    Write-Host "Service Name:  $serviceName"
+  SHELL
+
+end

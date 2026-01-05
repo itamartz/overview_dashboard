@@ -268,3 +268,6 @@ yarn-error.log*
 
 # Claude code
 settings.local.json
+
+# Vagrant
+.vagrant/
