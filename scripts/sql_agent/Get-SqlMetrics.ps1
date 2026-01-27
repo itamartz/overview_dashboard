@@ -125,7 +125,15 @@ function Send-ToApi {
         [int]$TTL
     )
     
+    # Generate deterministic ID from key fields (same metric always gets same ID)
+    $idSource = "$SystemName|$ProjectName|$Name|$Database|$Metric"
+    $md5 = [System.Security.Cryptography.MD5]::Create()
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
+    $hash = $md5.ComputeHash($bytes)
+    $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
+    
     $componentPayload = @{
+        Id       = $componentId
         Name     = $Name
         Database = $Database
         Metric   = $Metric

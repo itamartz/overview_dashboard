@@ -140,42 +140,71 @@ function Get-SshCommandOutput {
     }
 }
 
-# Alternative command execution using Shell Stream (for Cisco and similar devices)
-# Cisco IOS doesn't support SSH exec channel, only interactive shell
-function Get-SshShellOutput {
+# Create shell stream for Cisco devices (call once per target)
+function New-SshShellStreamWrapper {
     param(
-        [object]$Session,
-        [string]$Command,
-        [int]$WaitMs = 2000
+        [object]$Session
     )
     
     try {
-        # Create shell stream
         $stream = New-SSHShellStream -SSHSession $Session -ErrorAction Stop
         
         # Wait for prompt
-        Start-Sleep -Milliseconds 500
+        Start-Sleep -Milliseconds 1000
         $null = $stream.Read()
         
         # Send terminal length 0 to disable paging (Cisco specific)
         $stream.WriteLine("terminal length 0")
-        Start-Sleep -Milliseconds 500
+        Start-Sleep -Milliseconds 1000
         $null = $stream.Read()
         
-        # Send the actual command
-        $stream.WriteLine($Command)
-        Start-Sleep -Milliseconds $WaitMs
+        return $stream
+    }
+    catch {
+        Write-Warning "Failed to create shell stream: $_"
+        return $null
+    }
+}
+
+# Execute command using existing shell stream (for Cisco and similar devices)
+function Get-SshShellOutput {
+    param(
+        [object]$Stream,
+        [string]$Command,
+        [int]$InitialWaitMs = 2000,
+        [int]$ReadTimeoutMs = 10000
+    )
+    
+    try {
+        # Clear any pending output
+        $null = $Stream.Read()
         
-        # Read output
-        $output = $stream.Read()
+        # Send the command
+        $Stream.WriteLine($Command)
         
-        # Close stream
-        $stream.Close()
-        $stream.Dispose()
+        # Wait for initial response
+        Start-Sleep -Milliseconds $InitialWaitMs
+        
+        # Read output in loop until no more data
+        $allOutput = ""
+        $readAttempts = 0
+        $maxAttempts = [math]::Ceiling($ReadTimeoutMs / 500)
+        
+        do {
+            $chunk = $Stream.Read()
+            if ($chunk) {
+                $allOutput += $chunk
+                $readAttempts = 0  # Reset counter on successful read
+            }
+            else {
+                $readAttempts++
+                Start-Sleep -Milliseconds 500
+            }
+        } while ($readAttempts -lt 3 -and $readAttempts -lt $maxAttempts)
         
         return @{
             Success    = $true
-            Output     = $output
+            Output     = $allOutput
             ExitStatus = 0
         }
     }
@@ -232,7 +261,15 @@ function Send-ToApi {
         [int]$TTL
     )
     
+    # Generate deterministic ID from key fields (same metric always gets same ID)
+    $idSource = "$SystemName|$ProjectName|$Name|$Metric"
+    $md5 = [System.Security.Cryptography.MD5]::Create()
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
+    $hash = $md5.ComputeHash($bytes)
+    $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
+    
     $componentPayload = @{
+        Id       = $componentId
         Name     = $Name
         Metric   = $Metric
         Severity = $Severity
@@ -364,6 +401,7 @@ foreach ($target in $targets) {
     Write-Host "----------------------------------------" -ForegroundColor DarkGray
     
     $session = $null
+    $shellStream = $null
     $connectionFailed = $false
     
     if ($MockRun) {
@@ -380,6 +418,18 @@ foreach ($target in $targets) {
         }
         else {
             Write-Host "  [OK] Connected" -ForegroundColor Green
+            
+            # Create shell stream for Cisco devices (once per target)
+            if ($shellMode) {
+                $shellStream = New-SshShellStreamWrapper -Session $session
+                if ($null -eq $shellStream) {
+                    $connectionFailed = $true
+                    Write-Host "  [FAILED] Could not create shell stream" -ForegroundColor Red
+                }
+                else {
+                    Write-Host "  [OK] Shell stream ready" -ForegroundColor Green
+                }
+            }
         }
     }
     else {
@@ -459,7 +509,7 @@ foreach ($target in $targets) {
         
         # Execute command (use shell stream for Cisco devices)
         if ($shellMode) {
-            $result = Get-SshShellOutput -Session $session -Command $command
+            $result = Get-SshShellOutput -Stream $shellStream -Command $command
         }
         else {
             $result = Get-SshCommandOutput -Session $session -Command $command
@@ -514,6 +564,17 @@ foreach ($target in $targets) {
             -Name $targetName -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL
         if ($sent) {
             Write-Host "    -> Reported to Dashboard" -ForegroundColor Gray
+        }
+    }
+    
+    # Cleanup shell stream if used
+    if ($null -ne $shellStream) {
+        try {
+            $shellStream.Close()
+            $shellStream.Dispose()
+        }
+        catch {
+            # Ignore cleanup errors
         }
     }
     
