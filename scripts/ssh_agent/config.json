@@ -1,0 +1,166 @@
+{
+  "apiUrl": "https://overview.526443026.xyz/api/components",
+  "projectName": "Network Devices",
+  "systemName": "SSH Monitoring",
+  "defaultTTL": 120,
+  "connectionTimeoutSeconds": 30,
+  "targets": [
+    {
+      "name": "Juniper-Switch-01",
+      "host": "192.168.1.1",
+      "port": 22,
+      "username": "admin",
+      "password": "your_password_here",
+      "enabled": true,
+      "metrics": [
+        {
+          "name": "CPU Usage",
+          "command": "show chassis routing-engine",
+          "parser": "juniper_cpu",
+          "thresholds": {
+            "warning": 70,
+            "error": 90
+          }
+        },
+        {
+          "name": "Memory Usage",
+          "command": "show chassis routing-engine",
+          "parser": "juniper_memory",
+          "thresholds": {
+            "warning": 80,
+            "error": 95
+          }
+        },
+        {
+          "name": "Temperature",
+          "command": "show chassis routing-engine",
+          "parser": "juniper_temperature",
+          "thresholds": {
+            "warning": 65,
+            "error": 75
+          }
+        }
+      ]
+    },
+    {
+      "name": "Juniper-Switch-02",
+      "host": "192.168.1.2",
+      "port": 22,
+      "username": "admin",
+      "password": "your_password_here",
+      "enabled": false,
+      "metrics": [
+        {
+          "name": "CPU Usage",
+          "command": "show chassis routing-engine",
+          "parser": "juniper_cpu",
+          "thresholds": {
+            "warning": 70,
+            "error": 90
+          }
+        },
+        {
+          "name": "Memory Usage",
+          "command": "show chassis routing-engine",
+          "parser": "juniper_memory",
+          "thresholds": {
+            "warning": 80,
+            "error": 95
+          }
+        }
+      ]
+    },
+    {
+      "name": "PaloAlto-FW-01",
+      "host": "192.168.1.10",
+      "port": 22,
+      "username": "admin",
+      "password": "your_password_here",
+      "enabled": true,
+      "metrics": [
+        {
+          "name": "CPU Usage",
+          "command": "show system resources",
+          "parser": "paloalto_cpu",
+          "thresholds": {
+            "warning": 70,
+            "error": 90
+          }
+        },
+        {
+          "name": "Memory Usage",
+          "command": "show system resources",
+          "parser": "paloalto_memory",
+          "thresholds": {
+            "warning": 80,
+            "error": 95
+          }
+        },
+        {
+          "name": "Disk Usage",
+          "command": "show system disk-space",
+          "parser": "paloalto_disk",
+          "thresholds": {
+            "warning": 80,
+            "error": 90
+          }
+        },
+        {
+          "name": "Active Sessions",
+          "command": "show session info",
+          "parser": "paloalto_sessions",
+          "thresholds": {
+            "warning": 200000,
+            "error": 250000
+          }
+        },
+        {
+          "name": "Session Utilization",
+          "command": "show session info",
+          "parser": "paloalto_session_util",
+          "thresholds": {
+            "warning": 75,
+            "error": 90
+          }
+        }
+      ]
+    },
+    {
+      "name": "PaloAlto-FW-02",
+      "host": "192.168.1.11",
+      "port": 22,
+      "username": "admin",
+      "password": "your_password_here",
+      "enabled": false,
+      "metrics": [
+        {
+          "name": "CPU Usage",
+          "command": "show system resources",
+          "parser": "paloalto_cpu",
+          "thresholds": {
+            "warning": 70,
+            "error": 90
+          }
+        },
+        {
+          "name": "Memory Usage",
+          "command": "show system resources",
+          "parser": "paloalto_memory",
+          "thresholds": {
+            "warning": 80,
+            "error": 95
+          }
+        },
+        {
+          "name": "Disk Usage",
+          "command": "show system disk-space",
+          "parser": "paloalto_disk",
+          "thresholds": {
+            "warning": 80,
+            "error": 90
+          }
+        }
+      ]
+    }
+  ]
+}

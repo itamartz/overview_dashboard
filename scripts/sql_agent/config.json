@@ -1,0 +1,11 @@
+{
+    "apiUrl": "https://overview.526443026.xyz/api/components",
+    "projectName": "SQL Databases",
+    "systemName": "SQL Monitoring",
+    "defaultTTL": 300,
+    "backupWarningHours": 24,
+    "backupErrorHours": 48,
+    "serverName": "SQL-Server-01",
+    "instance": "localhost",
+    "databases": []
+}
