@@ -169,6 +169,7 @@
       "username": "admin",
       "password": "your_password_here",
       "enabled": false,
+      "shellMode": true,
       "metrics": [
         {
           "name": "CPU Usage",

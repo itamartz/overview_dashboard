@@ -104,15 +104,79 @@ function Connect-SshTarget {
 function Get-SshCommandOutput {
     param(
         [object]$Session,
-        [string]$Command
+        [string]$Command,
+        [int]$TimeoutSeconds = 30,
+        [int]$RetryCount = 1
+    )
+    
+    $attempt = 0
+    $lastError = $null
+    
+    while ($attempt -le $RetryCount) {
+        try {
+            $result = Invoke-SSHCommand -SSHSession $Session -Command $Command -TimeOut $TimeoutSeconds -ErrorAction Stop
+            return @{
+                Success    = $true
+                Output     = $result.Output -join "`n"
+                ExitStatus = $result.ExitStatus
+            }
+        }
+        catch {
+            $lastError = $_.Exception.Message
+            $attempt++
+            
+            # Log retry attempt
+            if ($attempt -le $RetryCount) {
+                Write-Host "    [RETRY] Command failed, retrying ($attempt/$RetryCount)..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 2
+            }
+        }
+    }
+    
+    return @{
+        Success    = $false
+        Output     = $lastError
+        ExitStatus = -1
+    }
+}
+
+# Alternative command execution using Shell Stream (for Cisco and similar devices)
+# Cisco IOS doesn't support SSH exec channel, only interactive shell
+function Get-SshShellOutput {
+    param(
+        [object]$Session,
+        [string]$Command,
+        [int]$WaitMs = 2000
     )
     
     try {
-        $result = Invoke-SSHCommand -SSHSession $Session -Command $Command -ErrorAction Stop
+        # Create shell stream
+        $stream = New-SSHShellStream -SSHSession $Session -ErrorAction Stop
+        
+        # Wait for prompt
+        Start-Sleep -Milliseconds 500
+        $null = $stream.Read()
+        
+        # Send terminal length 0 to disable paging (Cisco specific)
+        $stream.WriteLine("terminal length 0")
+        Start-Sleep -Milliseconds 500
+        $null = $stream.Read()
+        
+        # Send the actual command
+        $stream.WriteLine($Command)
+        Start-Sleep -Milliseconds $WaitMs
+        
+        # Read output
+        $output = $stream.Read()
+        
+        # Close stream
+        $stream.Close()
+        $stream.Dispose()
+        
         return @{
             Success    = $true
-            Output     = $result.Output -join "`n"
-            ExitStatus = $result.ExitStatus
+            Output     = $output
+            ExitStatus = 0
         }
     }
     catch {
@@ -293,6 +357,7 @@ foreach ($target in $targets) {
     $port = if ($target.port) { $target.port } else { 22 }
     $username = $target.username
     $password = $target.password
+    $shellMode = if ($target.shellMode -eq $true) { $true } else { $false }  # Use shell stream for Cisco devices
     
     Write-Host "----------------------------------------" -ForegroundColor DarkGray
     Write-Host "Target: $targetName ($host_`:$port)" -ForegroundColor White
@@ -392,8 +457,13 @@ foreach ($target in $targets) {
             continue
         }
         
-        # Execute command
-        $result = Get-SshCommandOutput -Session $session -Command $command
+        # Execute command (use shell stream for Cisco devices)
+        if ($shellMode) {
+            $result = Get-SshShellOutput -Session $session -Command $command
+        }
+        else {
+            $result = Get-SshCommandOutput -Session $session -Command $command
+        }
         
         if (-not $result.Success) {
             $severity = "error"
