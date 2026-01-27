@@ -84,19 +84,19 @@ function Get-SshCredential {
 
 function Connect-SshTarget {
     param(
-        [string]$Host,
+        [string]$TargetHost,
         [int]$Port,
         [PSCredential]$Credential,
         [int]$TimeoutSeconds
     )
     
     try {
-        $session = New-SSHSession -ComputerName $Host -Port $Port -Credential $Credential `
+        $session = New-SSHSession -ComputerName $TargetHost -Port $Port -Credential $Credential `
             -AcceptKey -Force -ConnectionTimeout $TimeoutSeconds -ErrorAction Stop
         return $session
     }
     catch {
-        Write-Warning "Failed to connect to ${Host}:${Port}: $_"
+        Write-Warning "Failed to connect to ${TargetHost}:${Port}: $_"
         return $null
     }
 }
@@ -307,7 +307,7 @@ foreach ($target in $targets) {
     elseif (-not $DryRun) {
         # Connect to target
         $credential = Get-SshCredential -Username $username -Password $password
-        $session = Connect-SshTarget -Host $host_ -Port $port -Credential $credential -TimeoutSeconds $connectionTimeout
+        $session = Connect-SshTarget -TargetHost $host_ -Port $port -Credential $credential -TimeoutSeconds $connectionTimeout
         
         if ($null -eq $session) {
             $connectionFailed = $true

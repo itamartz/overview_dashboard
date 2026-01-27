@@ -161,6 +161,34 @@
           }
         }
       ]
+    },
+    {
+      "name": "Cisco-Switch-01",
+      "host": "192.168.1.20",
+      "port": 22,
+      "username": "admin",
+      "password": "your_password_here",
+      "enabled": false,
+      "metrics": [
+        {
+          "name": "CPU Usage",
+          "command": "show processes cpu",
+          "parser": "cisco_cpu",
+          "thresholds": {
+            "warning": 70,
+            "error": 90
+          }
+        },
+        {
+          "name": "Memory Usage",
+          "command": "show processes memory",
+          "parser": "cisco_memory",
+          "thresholds": {
+            "warning": 80,
+            "error": 95
+          }
+        }
+      ]
     }
   ]
 }

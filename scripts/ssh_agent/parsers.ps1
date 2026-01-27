@@ -59,6 +59,67 @@ function Parse-JuniperTemperature {
 
 #endregion
 
+#region Cisco Parsers
+
+# Cisco CPU Parser
+# Parses output from "show processes cpu" command
+function Parse-CiscoCpu {
+    param([string]$Output)
+    
+    # Example: "CPU utilization for five seconds: 5%/1%; one minute: 6%; five minutes: 5%"
+    if ($Output -match 'five seconds:\s*(\d+)%') {
+        return [double]$Matches[1]
+    }
+    
+    # Alternative IOS-XE format: "CPU utilization for five seconds: 2%, one minute: 3%, five minutes: 2%"
+    if ($Output -match 'CPU utilization.*?(\d+)%') {
+        return [double]$Matches[1]
+    }
+    
+    # Nexus format: "CPU states  :   2.00% user,   1.00% kernel,  97.00% idle"
+    if ($Output -match 'idle\s*,?\s*(\d+\.?\d*)%?\s*idle') {
+        return [double](100 - [double]$Matches[1])
+    }
+    if ($Output -match '(\d+\.?\d*)%\s*idle') {
+        return [double](100 - [double]$Matches[1])
+    }
+    
+    return $null
+}
+
+# Cisco Memory Parser
+# Parses output from "show processes memory" or "show memory" command
+function Parse-CiscoMemory {
+    param([string]$Output)
+    
+    # Example: "Processor Pool Total:  123456789 Used:  98765432 Free:  24691357"
+    if ($Output -match 'Processor.*Total:\s*(\d+).*Used:\s*(\d+)') {
+        $total = [double]$Matches[1]
+        $used = [double]$Matches[2]
+        if ($total -gt 0) {
+            return [math]::Round(($used / $total) * 100, 1)
+        }
+    }
+    
+    # Alternative format: "Total:  123456K, Used:  98765K, Free:  24691K"
+    if ($Output -match 'Total:\s*(\d+)[KMG]?,?\s*Used:\s*(\d+)') {
+        $total = [double]$Matches[1]
+        $used = [double]$Matches[2]
+        if ($total -gt 0) {
+            return [math]::Round(($used / $total) * 100, 1)
+        }
+    }
+    
+    # Nexus format: "Memory usage:   15.22%"
+    if ($Output -match 'Memory usage:\s*(\d+\.?\d*)%') {
+        return [double]$Matches[1]
+    }
+    
+    return $null
+}
+
+#endregion
+
 #region Palo Alto Parsers
 
 # Palo Alto CPU Parser
@@ -265,6 +326,14 @@ function Invoke-Parser {
         }
         'juniper_temperature' {
             return Parse-JuniperTemperature -Output $Output
+        }
+        
+        # Cisco parsers
+        'cisco_cpu' {
+            return Parse-CiscoCpu -Output $Output
+        }
+        'cisco_memory' {
+            return Parse-CiscoMemory -Output $Output
         }
         
         # Palo Alto parsers
