@@ -151,8 +151,8 @@ function Send-ToApi {
 }
 
 function Get-MockDatabases {
-    $dbNames = @("master", "msdb", "model", "AppDB", "ReportingDB", "UserData")
-    $states = @("ONLINE", "ONLINE", "ONLINE", "ONLINE", "ONLINE", "RESTORING")
+    $dbNames = @("AppDB", "ReportingDB", "UserData", "Inventory", "CRM")
+    $states = @("ONLINE", "ONLINE", "ONLINE", "ONLINE", "RESTORING")
     $results = @()
     
     foreach ($i in 0..($dbNames.Count - 1)) {
@@ -240,8 +240,8 @@ else {
     try {
         Write-Host "Querying local databases..." -ForegroundColor Gray
         
-        # Get database info
-        $dbInfo = Get-DbaDatabase -SqlInstance $instance -ExcludeSystem:$false -ErrorAction Stop
+        # Get database info (exclude system databases: master, msdb, model, tempdb)
+        $dbInfo = Get-DbaDatabase -SqlInstance $instance -ExcludeSystem -ErrorAction Stop
         
         # Get backup history
         $backupHistory = Get-DbaDbBackupHistory -SqlInstance $instance -Last -ErrorAction SilentlyContinue
