@@ -173,7 +173,7 @@
       "metrics": [
         {
           "name": "CPU Usage",
-          "command": "show processes cpu",
+          "command": "show processes cpu | include CPU",
           "parser": "cisco_cpu",
           "thresholds": {
             "warning": 70,
@@ -182,7 +182,7 @@
         },
         {
           "name": "Memory Usage",
-          "command": "show processes memory",
+          "command": "show processes memory | include Free",
           "parser": "cisco_memory",
           "thresholds": {
             "warning": 80,
