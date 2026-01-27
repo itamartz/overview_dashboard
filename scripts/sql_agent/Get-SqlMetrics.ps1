@@ -118,6 +118,7 @@ function Send-ToApi {
         [string]$SystemName,
         [string]$ProjectName,
         [string]$Name,
+        [string]$Database,
         [string]$Metric,
         [string]$Severity,
         [string]$Status,
@@ -126,6 +127,7 @@ function Send-ToApi {
     
     $componentPayload = @{
         Name     = $Name
+        Database = $Database
         Metric   = $Metric
         Severity = $Severity
         Status   = $Status
@@ -263,7 +265,7 @@ else {
         
         # Report connection failure
         $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-            -Name $serverName -Metric "Connection" -Severity "error" -Status "Connection failed" -TTL $defaultTTL
+            -Name $serverName -Database "N/A" -Metric "Connection" -Severity "error" -Status "Connection failed" -TTL $defaultTTL
         exit 1
     }
 }
@@ -294,7 +296,7 @@ foreach ($db in $databases) {
     
     if (-not $DryRun) {
         $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-            -Name "$serverName - $dbName" -Metric "State" -Severity $stateSeverity -Status $dbState -TTL $defaultTTL
+            -Name $serverName -Database $dbName -Metric "State" -Severity $stateSeverity -Status $dbState -TTL $defaultTTL
         if ($sent) {
             Write-Host "    -> Reported" -ForegroundColor Gray
         }
@@ -317,7 +319,7 @@ foreach ($db in $databases) {
         
         if (-not $DryRun) {
             $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-                -Name "$serverName - $dbName" -Metric "Last Backup" -Severity $backupSeverity -Status $backupAge -TTL $defaultTTL
+                -Name $serverName -Database $dbName -Metric "Last Backup" -Severity $backupSeverity -Status $backupAge -TTL $defaultTTL
             if ($sent) {
                 Write-Host "    -> Reported" -ForegroundColor Gray
             }
@@ -328,7 +330,7 @@ foreach ($db in $databases) {
         
         if (-not $DryRun) {
             $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-                -Name "$serverName - $dbName" -Metric "Last Backup" -Severity "error" -Status "No backup" -TTL $defaultTTL
+                -Name $serverName -Database $dbName -Metric "Last Backup" -Severity "error" -Status "No backup" -TTL $defaultTTL
             if ($sent) {
                 Write-Host "    -> Reported" -ForegroundColor Gray
             }
