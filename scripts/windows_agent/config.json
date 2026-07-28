@@ -1,0 +1,14 @@
+{
+  "apiUrl": "http://localhost:5000/api/components",
+  "projectName": "Workstations",
+  "systemName": "Monitoring",
+  "defaultTTL": 120,
+  "thresholds": {
+    "warning": 85,
+    "error": 95
+  },
+  "services": [
+    "LanmanServer",
+    "Spooler"
+  ]
+}

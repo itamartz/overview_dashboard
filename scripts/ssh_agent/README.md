@@ -20,14 +20,29 @@ PowerShell agent for collecting metrics from SSH-accessible devices and reportin
    .\Get-SshMetrics.ps1
    ```
 
-3. **Test Without Connecting:**
+3. **Test Without Connecting (Dry Run):**
    ```powershell
    .\Get-SshMetrics.ps1 -DryRun
    ```
 
+4. **Test with Sample Data Sent to API (Mock Run):**
+   ```powershell
+   .\Get-SshMetrics.ps1 -MockRun
+   ```
+
+## Credential Management
+
+This agent supports three credential strategies:
+
+1. **Plaintext (Default):** Specify `username` and `password` in `config.json`. Only suitable for lab environments.
+2. **Local Encrypted:** Uses Windows DPAPI to store encrypted credentials. Add `"credentialMethod": "encrypted"` and point to the `encryptedPasswordFile` in `config.json`.
+3. **CyberArk CCP:** Retrieves credentials securely via CyberArk AIMWebService. Add `"credentialMethod": "cyberark"` and provide `cyberark` configuration block.
+
+(For more details, see the AGENT-DEVELOPMENT-GUIDE.md Section 7).
+
 ## Configuration
 
-Edit `config.json` to define SSH targets and metrics. Credentials are stored in plain text.
+Edit `config.json` to define SSH targets and metrics.
 
 ```json
 {

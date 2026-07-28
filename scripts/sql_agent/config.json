@@ -7,5 +7,19 @@
     "backupErrorHours": 48,
     "serverName": "SQL-Server-01",
     "instance": "localhost",
-    "databases": []
+    "databases": [],
+    "credentialMethod": "plaintext",
+    "sqlAuthentication": false,
+    "username": "",
+    "password": "",
+    "cyberarkSafe": "",
+    "cyberarkObject": "",
+    "encryptedPasswordFile": "",
+    "cyberark": {
+        "ccpUrl": "",
+        "appId": "",
+        "verifySsl": true,
+        "timeoutSeconds": 10,
+        "cacheMinutes": 5
+    }
 }

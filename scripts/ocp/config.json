@@ -1,0 +1,7 @@
+{
+  "apiUrl": "https://overview.526443026.xyz/api/components",
+  "projectName": "OpenShift Workloads",
+  "systemName": "OpenShift",
+  "defaultTTL": 300,
+  "namespaces": []
+}

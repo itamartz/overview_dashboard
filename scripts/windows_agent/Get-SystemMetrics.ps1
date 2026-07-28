@@ -1,271 +1,198 @@
 <#
 .SYNOPSIS
-    Gathers system metrics and formats them for API posting.
+    Gathers system metrics and posts them to the API.
 
 .DESCRIPTION
-    Collects CPU usage, memory usage, disk usage, and checks for services that should be running.
-    Computes severity (ok/warning/error) based on thresholds (>85% for warning/error).
-    Outputs JSON formatted for API consumption.
+    Collects CPU, memory, disk usage, and service status.
+    Computes severity based on thresholds. Outputs JSON formatted for API consumption.
+    Can operate in DryRun (no API calls) and MockRun (fake data, sends to API) modes.
 
-.PARAMETER ThresholdWarning
-    Warning threshold percentage (default: 85)
+.PARAMETER ConfigPath
+    Path to config.json (default: .\config.json)
 
-.PARAMETER ThresholdError
-    Error threshold percentage (default: 95)
+.PARAMETER DryRun
+    Collects metrics but does not send them to the API.
 
-.PARAMETER ProjectName
-    Name of the project for the payload (default: "Monitoring")
-
-.PARAMETER SystemName
-    Name of the system for the payload (default: "Workstations")
-
-.PARAMETER IgnoreServices
-    Array of service names or patterns to ignore when checking for stopped automatic services
-
-.EXAMPLE
-    .\Get-SystemMetrics.ps1
-    
-.EXAMPLE
-    .\Get-SystemMetrics.ps1 -ThresholdWarning 80 -ThresholdError 90 -ProjectName "MyProject"
+.PARAMETER MockRun
+    Generates fake metrics and sends them to the API.
 #>
-
 param(
-    [int]$ThresholdWarning = 85,
-    [int]$ThresholdError = 95,
-    [string]$ProjectName = "Workstations",
-    [string]$SystemName = "Monitoring",
-    [string[]]$IgnoreServices = @(
-        'edgeupdate',
-        'edgeupdatem',
-        'GoogleUpdaterInternalService*',
-        'GoogleUpdaterService*',
-        'gupdate',
-        'gupdatem',
-        'MapsBroker',
-        'WslInstaller',
-        'sppsvc',  # Software Protection Platform Service
-        'RtkBtManServ'  # Realtek Bluetooth
-    )
+    [string]$ConfigPath = "$PSScriptRoot\config.json",
+    [switch]$DryRun,
+    [switch]$MockRun
 )
 
+# 1. PRINT BANNER
+Write-Host "=============================================" -ForegroundColor Cyan
+Write-Host "         Overview Dashboard Agent            " -ForegroundColor Cyan
+Write-Host "         Windows System Metrics              " -ForegroundColor Cyan
+Write-Host "=============================================" -ForegroundColor Cyan
+
+if ($DryRun) { Write-Host "[MODE] DryRun - No data will be sent to API" -ForegroundColor Yellow }
+if ($MockRun) { Write-Host "[MODE] MockRun - Using fake data" -ForegroundColor Yellow }
+
+# 2. LOAD CONFIGURATION
+if (-not (Test-Path $ConfigPath)) {
+    Write-Error "Configuration file not found: $ConfigPath"
+    exit 1
+}
+
+try {
+    $config = Get-Content $ConfigPath | ConvertFrom-Json
+} catch {
+    Write-Error "Failed to parse config.json: $_"
+    exit 1
+}
+
+$apiUrl = $config.apiUrl
+$projectName = $config.projectName
+$systemName = $config.systemName
+$defaultTTL = if ($config.defaultTTL) { $config.defaultTTL } else { 120 }
+$warnThresh = if ($config.thresholds.warning) { $config.thresholds.warning } else { 85 }
+$errThresh = if ($config.thresholds.error) { $config.thresholds.error } else { 95 }
+$services = if ($config.services) { $config.services } else { @() }
+
+# 5. COLLECT DATA
 function Get-CPUUsage {
+    if ($MockRun) { return Get-Random -Minimum 10 -Maximum 99 }
     $cpuUsage = Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 2 | 
-    Select-Object -ExpandProperty CounterSamples | 
-    Select-Object -Last 1 -ExpandProperty CookedValue
+        Select-Object -ExpandProperty CounterSamples | Select-Object -Last 1 -ExpandProperty CookedValue
     return [math]::Round($cpuUsage, 2)
 }
 
 function Get-MemoryUsage {
+    if ($MockRun) { return Get-Random -Minimum 10 -Maximum 99 }
     $os = Get-CimInstance Win32_OperatingSystem
     $totalMemory = $os.TotalVisibleMemorySize
     $freeMemory = $os.FreePhysicalMemory
     $usedMemory = $totalMemory - $freeMemory
-    $memoryUsagePercent = [math]::Round(($usedMemory / $totalMemory) * 100, 2)
-    return $memoryUsagePercent
+    return [math]::Round(($usedMemory / $totalMemory) * 100, 2)
 }
 
 function Get-DiskUsage {
+    if ($MockRun) {
+        return @(
+            @{ DeviceID = "C:"; UsedPercent = (Get-Random -Minimum 10 -Maximum 99) },
+            @{ DeviceID = "D:"; UsedPercent = (Get-Random -Minimum 10 -Maximum 99) }
+        )
+    }
     $disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | 
     Select-Object DeviceID, 
     @{Name = "UsedPercent"; Expression = {
-            if ($_.Size -gt 0) {
-                [math]::Round((($_.Size - $_.FreeSpace) / $_.Size) * 100, 2)
-            }
-            else {
-                0
-            }
+            if ($_.Size -gt 0) { [math]::Round((($_.Size - $_.FreeSpace) / $_.Size) * 100, 2) } else { 0 }
         }
     }
     return $disks
 }
 
 function Get-StoppedAutoServices {
-    param(
-        [string[]]$IgnoreList = @()
-    )
-    
-    $stoppedServices = Get-Service | 
-    Where-Object { 
-        $_.StartType -eq 'Automatic' -and 
-        $_.Status -ne 'Running' 
-    } | 
-    Select-Object -ExpandProperty Name
-    
-    # Filter out ignored services
-    if ($IgnoreList.Count -gt 0) {
-        $filteredServices = @()
-        foreach ($service in $stoppedServices) {
-            $shouldIgnore = $false
-            foreach ($pattern in $IgnoreList) {
-                if ($service -like $pattern) {
-                    $shouldIgnore = $true
-                    break
-                }
-            }
-            if (-not $shouldIgnore) {
-                $filteredServices += $service
-            }
-        }
-        return $filteredServices
+    if ($MockRun) {
+        $chance = Get-Random -Minimum 1 -Maximum 10
+        if ($chance -gt 7) { return @("MockService1") }
+        return @()
     }
     
-    return $stoppedServices
+    $stopped = Get-Service | Where-Object { $_.StartType -eq 'Automatic' -and $_.Status -ne 'Running' } | Select-Object -ExpandProperty Name
+    $filtered = @()
+    foreach ($s in $stopped) {
+        $ignore = $false
+        foreach ($pattern in $services) {
+            if ($s -like "*$pattern*") { $ignore = $true; break }
+        }
+        if (-not $ignore) { $filtered += $s }
+    }
+    return $filtered
 }
 
-function Get-OverallSeverity {
-    param(
-        [double]$CpuUsage,
-        [double]$MemoryUsage,
-        [array]$Disks,
-        [array]$StoppedServices,
-        [int]$WarningThreshold,
-        [int]$ErrorThreshold
-    )
-    
-    $severity = "ok"
-    
-    # Check CPU
-    if ($CpuUsage -ge $ErrorThreshold) {
-        $severity = "error"
-    }
-    elseif ($CpuUsage -ge $WarningThreshold -and $severity -ne "error") {
-        $severity = "warning"
-    }
-    
-    # Check Memory
-    if ($MemoryUsage -ge $ErrorThreshold) {
-        $severity = "error"
-    }
-    elseif ($MemoryUsage -ge $WarningThreshold -and $severity -ne "error") {
-        $severity = "warning"
-    }
-    
-    # Check Disks
-    foreach ($disk in $Disks) {
-        if ($disk.UsedPercent -ge $ErrorThreshold) {
-            $severity = "error"
-        }
-        elseif ($disk.UsedPercent -ge $WarningThreshold -and $severity -ne "error") {
-            $severity = "warning"
-        }
-    }
-    
-    # Check Services
-    if ($StoppedServices.Count -gt 0) {
-        $severity = "error"
-    }
-    
-    return $severity
+$cpuUsage = Get-CPUUsage
+$memoryUsage = Get-MemoryUsage
+$disks = Get-DiskUsage
+$stoppedServices = Get-StoppedAutoServices
+
+# 7. CALCULATE SEVERITY
+$severity = "ok"
+
+if ($cpuUsage -ge $errThresh) { $severity = "error" }
+elseif ($cpuUsage -ge $warnThresh -and $severity -ne "error") { $severity = "warning" }
+
+if ($memoryUsage -ge $errThresh) { $severity = "error" }
+elseif ($memoryUsage -ge $warnThresh -and $severity -ne "error") { $severity = "warning" }
+
+foreach ($disk in $disks) {
+    if ($disk.UsedPercent -ge $errThresh) { $severity = "error" }
+    elseif ($disk.UsedPercent -ge $warnThresh -and $severity -ne "error") { $severity = "warning" }
 }
 
-function Build-DataString {
-    param(
-        [double]$CpuUsage,
-        [double]$MemoryUsage,
-        [array]$Disks,
-        [array]$StoppedServices
-    )
-    
-    $dataParts = @()
-    
-    # Add CPU
-    $dataParts += "CPU ($CpuUsage%)"
-    
-    # Add Memory
-    $dataParts += "Memory ($MemoryUsage%)"
-    
-    # Add Disks
-    foreach ($disk in $Disks) {
-        $dataParts += "Disk $($disk.DeviceID) ($($disk.UsedPercent)%)"
-    }
-    
-    # Add Stopped Services
-    if ($StoppedServices.Count -gt 0) {
-        $servicesList = $StoppedServices -join ", "
-        $dataParts += "Services Down: $servicesList"
-    }
-    
-    return $dataParts -join ", "
+if ($stoppedServices.Count -gt 0) { $severity = "error" }
+
+# 8. FORMAT STATUS
+$diskStrings = @()
+foreach ($disk in $disks) { $diskStrings += "$($disk.DeviceID) ($($disk.UsedPercent)%)" }
+$disksString = $diskStrings -join ", "
+$servicesString = if ($stoppedServices.Count -gt 0) { "Down: " + ($stoppedServices -join ", ") } else { "All Automatic Services Running" }
+$hostName = $env:COMPUTERNAME
+$metricName = "System"
+
+# Calculate Deterministic MD5 Component ID
+$idSource = "$systemName|$projectName|$hostName|$metricName"
+$md5 = [System.Security.Cryptography.MD5]::Create()
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
+$hash = $md5.ComputeHash($bytes)
+$componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
+
+$payloadDict = @{
+    Id       = $componentId
+    Name     = $hostName
+    CPU      = "$cpuUsage%"
+    Memory   = "$memoryUsage%"
+    Disks    = $disksString
+    Services = $servicesString
+    Severity = $severity
+    TTL      = $defaultTTL
 }
 
-# Main execution
-try {
-    Write-Host "Gathering system metrics..." -ForegroundColor Cyan
-    
-    # Collect metrics
-    $cpuUsage = Get-CPUUsage
-    $memoryUsage = Get-MemoryUsage
-    $disks = Get-DiskUsage
-    $stoppedServices = Get-StoppedAutoServices -IgnoreList $IgnoreServices
-    
-    # Calculate severity
-    $severity = Get-OverallSeverity -CpuUsage $cpuUsage `
-        -MemoryUsage $memoryUsage `
-        -Disks $disks `
-        -StoppedServices $stoppedServices `
-        -WarningThreshold $ThresholdWarning `
-        -ErrorThreshold $ThresholdError
-    
-    # Format Disks String
-    $diskStrings = @()
-    foreach ($disk in $disks) {
-        $diskStrings += "$($disk.DeviceID) ($($disk.UsedPercent)%)"
-    }
-    $disksString = $diskStrings -join ", "
-    
-    # Format Services String
-    if ($stoppedServices.Count -gt 0) {
-        $servicesString = "Down: " + ($stoppedServices -join ", ")
-    }
-    else {
-        $servicesString = "All Automatic Services Running"
-    }
-    
-    # Build JSON payload
-    $payload = @{
-        projectName = $ProjectName
-        systemName  = $SystemName
-        payload     = @{
-            Id       = $env:COMPUTERNAME
-            Name     = $env:COMPUTERNAME
-            CPU      = "$cpuUsage%"
-            Memory   = "$memoryUsage%"
-            Disks    = $disksString
-            Services = $servicesString
-            Severity = $severity
-        }
-    }
-    
-    # Convert to JSON
-    $jsonOutput = $payload | ConvertTo-Json -Depth 10
-    
-    # Display results
-    Write-Host "`nSystem Metrics Summary:" -ForegroundColor Green
-    Write-Host "CPU Usage: $cpuUsage%" -ForegroundColor $(if ($cpuUsage -ge $ThresholdError) { "Red" } elseif ($cpuUsage -ge $ThresholdWarning) { "Yellow" } else { "Green" })
-    Write-Host "Memory Usage: $memoryUsage%" -ForegroundColor $(if ($memoryUsage -ge $ThresholdError) { "Red" } elseif ($memoryUsage -ge $ThresholdWarning) { "Yellow" } else { "Green" })
-    
-    foreach ($disk in $disks) {
-        Write-Host "Disk $($disk.DeviceID) Usage: $($disk.UsedPercent)%" -ForegroundColor $(if ($disk.UsedPercent -ge $ThresholdError) { "Red" } elseif ($disk.UsedPercent -ge $ThresholdWarning) { "Yellow" } else { "Green" })
-    }
-    
-    if ($stoppedServices.Count -gt 0) {
-        Write-Host "Stopped Auto Services: $($stoppedServices.Count)" -ForegroundColor Red
-        $stoppedServices | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
-    }
-    else {
-        Write-Host "All automatic services are running (or ignored)" -ForegroundColor Green
-    }
-    
-    Write-Host "`nOverall Severity: $severity" -ForegroundColor $(if ($severity -eq "error") { "Red" } elseif ($severity -eq "warning") { "Yellow" } else { "Green" })
-    
-    Write-Host "`nJSON Output:" -ForegroundColor Cyan
-    Write-Host $jsonOutput
-    
-    # Return the JSON object for further use (e.g., posting to API)
-    return $payload
-    
+$body = @{
+    systemName  = $systemName
+    projectName = $projectName
+    payload     = ($payloadDict | ConvertTo-Json -Compress)
+} | ConvertTo-Json -Compress -Depth 10
+
+# 10. LOG RESULTS
+Write-Host "`nSystem Metrics Summary:" -ForegroundColor Green
+
+$cpuColor = if ($cpuUsage -ge $errThresh) { "Red" } elseif ($cpuUsage -ge $warnThresh) { "Yellow" } else { "Green" }
+Write-Host "CPU Usage: $cpuUsage%" -ForegroundColor $cpuColor
+
+$memColor = if ($memoryUsage -ge $errThresh) { "Red" } elseif ($memoryUsage -ge $warnThresh) { "Yellow" } else { "Green" }
+Write-Host "Memory Usage: $memoryUsage%" -ForegroundColor $memColor
+
+foreach ($disk in $disks) {
+    $diskColor = if ($disk.UsedPercent -ge $errThresh) { "Red" } elseif ($disk.UsedPercent -ge $warnThresh) { "Yellow" } else { "Green" }
+    Write-Host "Disk $($disk.DeviceID) Usage: $($disk.UsedPercent)%" -ForegroundColor $diskColor
 }
-catch {
-    Write-Error "An error occurred while gathering metrics: $_"
-    exit 1
+
+if ($stoppedServices.Count -gt 0) {
+    Write-Host "Stopped Auto Services: $($stoppedServices.Count)" -ForegroundColor Red
+    $stoppedServices | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+} else {
+    Write-Host "All automatic services are running (or ignored)" -ForegroundColor Green
+}
+
+$sevColor = if ($severity -eq "error") { "Red" } elseif ($severity -eq "warning") { "Yellow" } else { "Green" }
+Write-Host "`nOverall Severity: $severity" -ForegroundColor $sevColor
+
+Write-Host "`nPayload ID: $componentId" -ForegroundColor Cyan
+
+# 9. SEND TO API
+if ($DryRun) {
+    Write-Host "`n[DRY RUN] Skipping API POST." -ForegroundColor Yellow
+    Write-Host "Payload JSON:`n$body" -ForegroundColor Gray
+} else {
+    Write-Host "`nPosting to API: $apiUrl" -ForegroundColor Cyan
+    try {
+        $response = Invoke-RestMethod -Uri $apiUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 15 -ErrorAction Stop
+        Write-Host "[SUCCESS] Metrics posted successfully." -ForegroundColor Green
+    } catch {
+        Write-Host "[ERROR] Failed to post to API: $_" -ForegroundColor Red
+    }
 }

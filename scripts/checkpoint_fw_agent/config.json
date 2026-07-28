@@ -1,0 +1,10 @@
+{
+  "apiUrl": "https://overview.526443026.xyz/api/components",
+  "projectName": "Firewalls",
+  "systemName": "Checkpoint",
+  "defaultTTL": 120,
+  "thresholds": {
+    "warning": 80,
+    "error": 90
+  }
+}

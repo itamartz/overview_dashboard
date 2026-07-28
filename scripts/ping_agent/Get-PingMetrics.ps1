@@ -10,19 +10,25 @@
     Path to the components.csv file. Default: $PSScriptRoot\components.csv
 
 .PARAMETER ApiUrl
-    The API endpoint URL. Default: https://overview.526443026.xyz/api/components
+    The API endpoint URL.
 
 .PARAMETER ProjectName
-    The project name for the dashboard. Default: "Ping Checks"
+    The project name for the dashboard.
 
 .PARAMETER SystemName
-    The system name for the dashboard. Default: "Network Monitoring"
+    The system name for the dashboard.
+
+.PARAMETER DefaultTTL
+    Time-To-Live in seconds for the components. Default: 60
 
 .PARAMETER TimeoutMs
     Timeout for Ping in milliseconds. Default: 1000
 
-.EXAMPLE
-    .\Get-PingMetrics.ps1
+.PARAMETER DryRun
+    Shows what would be checked without sending API calls or doing pings.
+
+.PARAMETER MockRun
+    Generates random ok/error ping results and sends to API.
 #>
 
 param(
@@ -30,10 +36,72 @@ param(
     [string]$ApiUrl = "https://overview.526443026.xyz/api/components",
     [string]$ProjectName = "Ping Checks",
     [string]$SystemName = "Network Monitoring",
-    [int]$TimeoutMs = 1000
+    [int]$DefaultTTL = 60,
+    [int]$TimeoutMs = 1000,
+    [switch]$DryRun,
+    [switch]$MockRun
 )
 
-# Function to test Ping quickly
+# Startup Banner
+Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host " Ping Agent - Overview Dashboard         " -ForegroundColor Cyan
+Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host "API URL:      $ApiUrl" -ForegroundColor Cyan
+Write-Host "Project:      $ProjectName" -ForegroundColor Cyan
+Write-Host "System:       $SystemName" -ForegroundColor Cyan
+Write-Host "TTL:          $DefaultTTL" -ForegroundColor Cyan
+$mode = "Normal"
+if ($DryRun) { $mode = "DryRun" }
+if ($MockRun) { $mode = "MockRun" }
+Write-Host "Mode:         $mode" -ForegroundColor Cyan
+Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host ""
+
+function Send-ToApi {
+    param(
+        [string]$ApiUrl,
+        [string]$SystemName,
+        [string]$ProjectName,
+        [string]$Name,
+        [string]$Metric,
+        [string]$Severity,
+        [string]$Status,
+        [int]$TTL
+    )
+
+    # Generate deterministic ID from key fields
+    $idSource = "$SystemName|$ProjectName|$Name|$Metric"
+    $md5 = [System.Security.Cryptography.MD5]::Create()
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
+    $hash = $md5.ComputeHash($bytes)
+    $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
+
+    $componentPayload = @{
+        Id       = $componentId
+        Name     = $Name
+        Metric   = $Metric
+        Severity = $Severity
+        Status   = $Status
+        TTL      = $TTL
+    } | ConvertTo-Json -Compress
+
+    $body = @{
+        systemName  = $SystemName
+        projectName = $ProjectName
+        payload     = $componentPayload
+    } | ConvertTo-Json -Compress
+
+    try {
+        Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body `
+            -ContentType "application/json" -ErrorAction Stop | Out-Null
+        return $true
+    }
+    catch {
+        Write-Warning "Failed to send to API: $_"
+        return $false
+    }
+}
+
 function Test-Ping {
     param(
         [string]$Target,
@@ -42,7 +110,6 @@ function Test-Ping {
 
     $ping = New-Object System.Net.NetworkInformation.Ping
     try {
-        # Buffer size 32 bytes is standard for Windows ping, but we can use less for speed if needed.
         $buffer = New-Object byte[] 32
         $reply = $ping.Send($Target, $Timeout, $buffer)
         
@@ -55,65 +122,56 @@ function Test-Ping {
         return $false
     }
     finally {
-        $ping.Dispose()
+        if ($ping) {
+            $ping.Dispose()
+        }
     }
 }
 
-# Check if file exists
 if (-not (Test-Path $CsvPath)) {
-    Write-Error "CSV/Host file not found at $CsvPath"
+    Write-Host "CSV/Host file not found at $CsvPath" -ForegroundColor Red
     exit 1
 }
 
-# Read Hosts. Assuming simple list. We check if it has headers or not.
-# Based on user input, it's just a list of domains.
-# We will use Import-Csv with Header "Host" to handle it consistently.
 $hosts = Import-Csv -Path $CsvPath -Header "Host"
-
-Write-Host "Found $($hosts.Count) hosts."
+Write-Host "Found $($hosts.Count) hosts." -ForegroundColor Magenta
 
 foreach ($item in $hosts) {
     $hostName = $item.Host.Trim()
     
-    # Skip empty lines
     if ([string]::IsNullOrWhiteSpace($hostName)) { continue }
 
-    Write-Host "Pinging $hostName..." -NoNewline
+    if ($DryRun) {
+        Write-Host "[DRY RUN] Would ping $hostName and report to API." -ForegroundColor Yellow
+        continue
+    }
 
-    $isUp = Test-Ping -Target $hostName -Timeout $TimeoutMs
+    Write-Host "Pinging $hostName... " -NoNewline -ForegroundColor Cyan
+
+    $isUp = $false
+    if ($MockRun) {
+        $isUp = (Get-Random -Minimum 0 -Maximum 100) -gt 20
+    } else {
+        $isUp = Test-Ping -Target $hostName -Timeout $TimeoutMs
+    }
 
     if ($isUp) {
-        Write-Host " UP"
+        Write-Host "UP " -NoNewline -ForegroundColor Green
         $severity = "ok"
         $status = "Ping OK"
     }
     else {
-        Write-Host " DOWN"
+        Write-Host "DOWN " -NoNewline -ForegroundColor Red
         $severity = "error"
         $status = "Ping Failed"
     }
 
-    # Build Component Payload
-    $componentPayload = @{
-        Name     = "Ping $hostName"
-        Severity = $severity
-        Status   = $status
-        TTL      = 60 
-    } | ConvertTo-Json -Compress
+    $success = Send-ToApi -ApiUrl $ApiUrl -SystemName $SystemName -ProjectName $ProjectName `
+        -Name "Ping $hostName" -Metric "Ping" -Severity $severity -Status $status -TTL $DefaultTTL
 
-    # Build API Body
-    $body = @{
-        systemName  = $SystemName
-        projectName = $ProjectName
-        payload     = $componentPayload
-    } | ConvertTo-Json -Compress
-
-    # Send to API
-    try {
-        Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body -ContentType "application/json" -ErrorAction Stop | Out-Null
-        Write-Host " -> Reported"
-    }
-    catch {
-        Write-Error "`nFailed to report $($hostName): $_"
+    if ($success) {
+        Write-Host "-> Reported" -ForegroundColor Green
+    } else {
+        Write-Host "-> Failed to report" -ForegroundColor Red
     }
 }

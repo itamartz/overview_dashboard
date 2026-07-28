@@ -1,40 +1,33 @@
-# Installation Instructions
+# OpenShift Agent
 
-1.  **Copy Files**
-    Copy the python script and systemd files to the server:
-    ```bash
-    mkdir -p /opt/monitoring
-    cp monitor_ocp.py /opt/monitoring/
-    cp monitor-ocp.service /etc/systemd/system/
-    cp monitor-ocp.timer /etc/systemd/system/
-    ```
+Monitors OpenShift / Kubernetes deployments, statefulsets, and daemonsets, evaluating their scaling status and reporting to the Overview Dashboard.
 
-2.  **Permissions**
-    Make sure the script is executable (optional for python, but good practice):
-    ```bash
-    chmod +x /opt/monitoring/monitor_ocp.py
-    ```
+## Usage
 
-3.  **Reload Daemon**
-    Reload systemd to recognize the new files:
-    ```bash
-    systemctl daemon-reload
-    ```
+```bash
+# Run normally (will look for config.json in the same directory)
+python3 monitor_ocp.py
 
-4.  **Enable and Start Timer**
-    Start the timer immediately and enable it to persist on reboot:
-    ```bash
-    systemctl enable --now monitor-ocp.timer
-    ```
+# Run in mock mode for testing without an oc client
+python3 monitor_ocp.py --mock
 
-5.  **Status Check**
-    Verify the timer is active:
-    ```bash
-    systemctl list-timers --all | grep monitor
-    ```
-    
-    Trigger a manual run to test:
-    ```bash
-    systemctl start monitor-ocp.service
-    systemctl status monitor-ocp.service
-    ```
+# Run in dry-run mode (fetches real data but does not post to API)
+python3 monitor_ocp.py --dry-run
+
+# Override arguments
+python3 monitor_ocp.py --api-url "https://dashboard/api/components" --project-name "K8s"
+```
+
+## Configuration (config.json)
+
+```json
+{
+  "apiUrl": "https://dashboard/api/components",
+  "projectName": "OpenShift Workloads",
+  "systemName": "OpenShift",
+  "defaultTTL": 300,
+  "namespaces": []
+}
+```
+
+* Leave `namespaces` empty `[]` to monitor all namespaces.

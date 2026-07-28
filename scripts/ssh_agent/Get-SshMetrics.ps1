@@ -72,6 +72,107 @@ function Install-PoshSSHIfNeeded {
     return $true
 }
 
+function Get-CyberArkCredential {
+    param(
+        [string]$CcpUrl,
+        [string]$AppId,
+        [string]$Safe,
+        [string]$ObjectName,
+        [bool]$VerifySsl = $true,
+        [int]$TimeoutSeconds = 10
+    )
+
+    $queryParams = @(
+        "AppID=$([uri]::EscapeDataString($AppId))",
+        "Safe=$([uri]::EscapeDataString($Safe))",
+        "Object=$([uri]::EscapeDataString($ObjectName))"
+    )
+    $fullUrl = "$CcpUrl`?$($queryParams -join '&')"
+
+    $invokeParams = @{
+        Uri         = $fullUrl
+        Method      = 'GET'
+        ContentType = 'application/json'
+        TimeoutSec  = $TimeoutSeconds
+        ErrorAction = 'Stop'
+    }
+
+    if (-not $VerifySsl) {
+        $invokeParams.SkipCertificateCheck = $true
+    }
+
+    try {
+        $response = Invoke-RestMethod @invokeParams
+        return @{
+            Username = $response.UserName
+            Password = $response.Content
+            Address  = $response.Address
+            Success  = $true
+        }
+    }
+    catch {
+        Write-Warning "CyberArk CCP lookup failed for '$ObjectName' in safe '$Safe': $_"
+        return @{ Username = ""; Password = ""; Address = ""; Success = $false }
+    }
+}
+
+function Get-EncryptedCredential {
+    param(
+        [string]$EncryptedFilePath,
+        [string]$Username
+    )
+
+    if (-not (Test-Path $EncryptedFilePath)) {
+        Write-Warning "Encrypted credential file not found: $EncryptedFilePath"
+        return @{ Username = $Username; Password = ""; Success = $false }
+    }
+
+    try {
+        $secureString = Get-Content $EncryptedFilePath | ConvertTo-SecureString
+        $credential = New-Object System.Management.Automation.PSCredential($Username, $secureString)
+        return @{
+            Username = $Username
+            Password = $credential.GetNetworkCredential().Password
+            Success  = $true
+        }
+    }
+    catch {
+        Write-Warning "Failed to decrypt credential file '$EncryptedFilePath': $_"
+        return @{ Username = $Username; Password = ""; Success = $false }
+    }
+}
+
+function Resolve-Credential {
+    param(
+        [string]$Method,
+        [object]$Target,
+        [object]$CyberArkConfig
+    )
+
+    switch ($Method.ToLower()) {
+        'cyberark' {
+            return Get-CyberArkCredential `
+                -CcpUrl $CyberArkConfig.ccpUrl `
+                -AppId $CyberArkConfig.appId `
+                -Safe $Target.cyberarkSafe `
+                -ObjectName $Target.cyberarkObject `
+                -VerifySsl $CyberArkConfig.verifySsl `
+                -TimeoutSeconds $CyberArkConfig.timeoutSeconds
+        }
+        'encrypted' {
+            $encPath = Join-Path $PSScriptRoot $Target.encryptedPasswordFile
+            return Get-EncryptedCredential -EncryptedFilePath $encPath -Username $Target.username
+        }
+        default {
+            return @{
+                Username = $Target.username
+                Password = $Target.password
+                Success  = ($null -ne $Target.password -and $Target.password -ne "")
+            }
+        }
+    }
+}
+
 function Get-SshCredential {
     param(
         [string]$Username,
@@ -351,6 +452,7 @@ $projectName = $config.projectName
 $systemName = $config.systemName
 $defaultTTL = if ($config.defaultTTL) { $config.defaultTTL } else { 120 }
 $connectionTimeout = if ($config.connectionTimeoutSeconds) { $config.connectionTimeoutSeconds } else { 30 }
+$credentialMethod = if ($config.credentialMethod) { $config.credentialMethod } else { "plaintext" }
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "SSH Metrics Agent" -ForegroundColor Cyan
@@ -358,6 +460,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "API URL: $apiUrl"
 Write-Host "Project: $projectName"
 Write-Host "System:  $systemName"
+Write-Host "Credentials: $credentialMethod"
 Write-Host ""
 
 if ($DryRun) {
@@ -408,8 +511,20 @@ foreach ($target in $targets) {
         Write-Host "  [MOCK] Simulating connection to $host_`:$port" -ForegroundColor Magenta
     }
     elseif (-not $DryRun) {
-        # Connect to target
-        $credential = Get-SshCredential -Username $username -Password $password
+        # Resolve credentials using configured method
+        $resolvedCred = Resolve-Credential -Method $credentialMethod -Target $target -CyberArkConfig $config.cyberark
+        if (-not $resolvedCred.Success) {
+            Write-Host "  [FAILED] Could not retrieve credentials" -ForegroundColor Red
+            $connectionFailed = $true
+            # Report credential failure for each metric
+            foreach ($metric in $target.metrics) {
+                Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+                    -Name $targetName -Metric $metric.name -Severity "error" -Status "Credential retrieval failed" -TTL $defaultTTL
+            }
+            Write-Host ""
+            continue
+        }
+        $credential = Get-SshCredential -Username $resolvedCred.Username -Password $resolvedCred.Password
         $session = Connect-SshTarget -TargetHost $host_ -Port $port -Credential $credential -TimeoutSeconds $connectionTimeout
         
         if ($null -eq $session) {

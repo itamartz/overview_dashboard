@@ -61,6 +61,107 @@ function Install-DbaToolsIfNeeded {
     return $true
 }
 
+function Get-CyberArkCredential {
+    param(
+        [string]$CcpUrl,
+        [string]$AppId,
+        [string]$Safe,
+        [string]$ObjectName,
+        [bool]$VerifySsl = $true,
+        [int]$TimeoutSeconds = 10
+    )
+
+    $queryParams = @(
+        "AppID=$([uri]::EscapeDataString($AppId))",
+        "Safe=$([uri]::EscapeDataString($Safe))",
+        "Object=$([uri]::EscapeDataString($ObjectName))"
+    )
+    $fullUrl = "$CcpUrl`?$($queryParams -join '&')"
+
+    $invokeParams = @{
+        Uri         = $fullUrl
+        Method      = 'GET'
+        ContentType = 'application/json'
+        TimeoutSec  = $TimeoutSeconds
+        ErrorAction = 'Stop'
+    }
+
+    if (-not $VerifySsl) {
+        $invokeParams.SkipCertificateCheck = $true
+    }
+
+    try {
+        $response = Invoke-RestMethod @invokeParams
+        return @{
+            Username = $response.UserName
+            Password = $response.Content
+            Address  = $response.Address
+            Success  = $true
+        }
+    }
+    catch {
+        Write-Warning "CyberArk CCP lookup failed for '$ObjectName' in safe '$Safe': $_"
+        return @{ Username = ""; Password = ""; Address = ""; Success = $false }
+    }
+}
+
+function Get-EncryptedCredential {
+    param(
+        [string]$EncryptedFilePath,
+        [string]$Username
+    )
+
+    if (-not (Test-Path $EncryptedFilePath)) {
+        Write-Warning "Encrypted credential file not found: $EncryptedFilePath"
+        return @{ Username = $Username; Password = ""; Success = $false }
+    }
+
+    try {
+        $secureString = Get-Content $EncryptedFilePath | ConvertTo-SecureString
+        $credential = New-Object System.Management.Automation.PSCredential($Username, $secureString)
+        return @{
+            Username = $Username
+            Password = $credential.GetNetworkCredential().Password
+            Success  = $true
+        }
+    }
+    catch {
+        Write-Warning "Failed to decrypt credential file '$EncryptedFilePath': $_"
+        return @{ Username = $Username; Password = ""; Success = $false }
+    }
+}
+
+function Resolve-Credential {
+    param(
+        [string]$Method,
+        [object]$Config,
+        [object]$CyberArkConfig
+    )
+
+    switch ($Method.ToLower()) {
+        'cyberark' {
+            return Get-CyberArkCredential `
+                -CcpUrl $CyberArkConfig.ccpUrl `
+                -AppId $CyberArkConfig.appId `
+                -Safe $Config.cyberarkSafe `
+                -ObjectName $Config.cyberarkObject `
+                -VerifySsl $CyberArkConfig.verifySsl `
+                -TimeoutSeconds $CyberArkConfig.timeoutSeconds
+        }
+        'encrypted' {
+            $encPath = Join-Path $PSScriptRoot $Config.encryptedPasswordFile
+            return Get-EncryptedCredential -EncryptedFilePath $encPath -Username $Config.username
+        }
+        default {
+            return @{
+                Username = $Config.username
+                Password = $Config.password
+                Success  = ($null -ne $Config.password -and $Config.password -ne "")
+            }
+        }
+    }
+}
+
 function Get-BackupSeverity {
     param(
         [datetime]$LastBackup,
@@ -159,8 +260,8 @@ function Send-ToApi {
 }
 
 function Get-MockDatabases {
-    $dbNames = @("AppDB", "ReportingDB", "UserData", "Inventory", "CRM")
-    $states = @("ONLINE", "ONLINE", "ONLINE", "ONLINE", "RESTORING")
+    $dbNames = @("AppDB", "ReportingDB", "UserData", "Inventory", "CRM", "LegacyDB")
+    $states = @("ONLINE", "ONLINE", "ONLINE", "ONLINE", "RESTORING", "SUSPECT")
     $results = @()
     
     foreach ($i in 0..($dbNames.Count - 1)) {
@@ -206,6 +307,8 @@ $backupErrorHours = if ($config.backupErrorHours) { $config.backupErrorHours } e
 $serverName = if ($config.serverName) { $config.serverName } else { $env:COMPUTERNAME }
 $instance = if ($config.instance) { $config.instance } else { "localhost" }
 $filterDatabases = $config.databases
+$credentialMethod = if ($config.credentialMethod) { $config.credentialMethod } else { "plaintext" }
+$useSqlAuth = if ($config.sqlAuthentication) { $config.sqlAuthentication } else { $false }
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "SQL Metrics Agent (Local)" -ForegroundColor Cyan
@@ -214,6 +317,11 @@ Write-Host "Server:  $serverName"
 Write-Host "Instance: $instance"
 Write-Host "API URL: $apiUrl"
 Write-Host "Backup Warning: ${backupWarningHours}h | Error: ${backupErrorHours}h"
+if ($useSqlAuth) {
+    Write-Host "Auth:     SQL Authentication ($credentialMethod)"
+} else {
+    Write-Host "Auth:     Windows Integrated"
+}
 Write-Host ""
 
 if ($DryRun) {
@@ -241,7 +349,8 @@ if ($MockRun) {
 }
 elseif ($DryRun) {
     Write-Host "[DRY RUN] Would query databases from $instance"
-    exit 0
+    Write-Host "[DRY RUN] Using simulated databases for dry-run output"
+    $databases = Get-MockDatabases
 }
 else {
     # Query local SQL Server
@@ -249,10 +358,37 @@ else {
         Write-Host "Querying local databases..." -ForegroundColor Gray
         
         # Get database info (exclude system databases: master, msdb, model, tempdb)
-        $dbInfo = Get-DbaDatabase -SqlInstance $instance -ExcludeSystem -ErrorAction Stop
+        # Build connection parameters
+        $dbaParams = @{
+            SqlInstance  = $instance
+            ExcludeSystem = $true
+            ErrorAction  = 'Stop'
+        }
+        $dbaHistoryParams = @{
+            SqlInstance = $instance
+            Last        = $true
+            ErrorAction = 'SilentlyContinue'
+        }
+
+        # Add SQL Authentication credentials if configured
+        if ($useSqlAuth) {
+            $resolvedCred = Resolve-Credential -Method $credentialMethod -Config $config -CyberArkConfig $config.cyberark
+            if (-not $resolvedCred.Success) {
+                Write-Host "[FAILED] Could not retrieve SQL credentials" -ForegroundColor Red
+                $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+                    -Name $serverName -Database "N/A" -Metric "Connection" -Severity "error" -Status "Credential retrieval failed" -TTL $defaultTTL
+                exit 1
+            }
+            $securePassword = ConvertTo-SecureString $resolvedCred.Password -AsPlainText -Force
+            $sqlCredential = New-Object System.Management.Automation.PSCredential($resolvedCred.Username, $securePassword)
+            $dbaParams.SqlCredential = $sqlCredential
+            $dbaHistoryParams.SqlCredential = $sqlCredential
+        }
+
+        $dbInfo = Get-DbaDatabase @dbaParams
         
         # Get backup history
-        $backupHistory = Get-DbaDbBackupHistory -SqlInstance $instance -Last -ErrorAction SilentlyContinue
+        $backupHistory = Get-DbaDbBackupHistory @dbaHistoryParams
         
         # Build database list
         $databases = foreach ($db in $dbInfo) {

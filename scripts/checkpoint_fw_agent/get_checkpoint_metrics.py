@@ -3,12 +3,7 @@
 Checkpoint Firewall Metrics Agent
 
 Gathers system metrics (CPU, memory, cluster state, errors) from Checkpoint Gaia OS
-and formats them for API posting.
-
-Usage:
-    python3 get_checkpoint_metrics.py
-    python3 get_checkpoint_metrics.py --threshold-warning 80 --threshold-error 90
-    python3 get_checkpoint_metrics.py --mock (for testing without Checkpoint hardware)
+and formats them for API posting. Includes built-in API posting logic.
 """
 
 import argparse
@@ -18,7 +13,11 @@ import socket
 import subprocess
 import sys
 import re
-from typing import Dict, List, Tuple, Any
+import hashlib
+import urllib.request
+import urllib.error
+import ssl
+from typing import Dict, List, Tuple
 
 # Mock data for testing
 MOCK_DATA = {
@@ -48,67 +47,64 @@ ID         Unique Address  Assigned Load   State
 1 (local)  10.231.149.1    100%            ACTIVE
 2          10.231.149.2    0%              STANDBY
 
-Active PNOTEs: None
-
-Last member state change event:
-   Event Code:                 CLUS-114904
-   State change:               ACTIVE(!) -> ACTIVE
-   Reason for state change:    Reason for ACTIVE! alert has been resolved
-   Event time:                 Wed Mar 12 01:33:38 2025
-
-Cluster failover count:
-   Failover counter:           0
-   Time of counter reset:      Wed Mar 12 00:32:50 2025 (reboot)''',
+Active PNOTEs: None''',
     'cphaprob_list': 'Device Name: Synchronization\nState: OK\n\nDevice Name: Filter\nState: OK',
-    'heavy_conn': '''[fw_60]; conn: 192.168.1.1:3788 -> 192.168.1.3:8080 IPP 6; Instance load: 68%; Connection instance load 91%; StartTime: 17/12/25 03:18:18; Duration: 3; IdentificationTime: 17/12/25 03:18:19; Seervice: 6:8080; Total Bytes: 1123534;
-[fw_60]; conn: 10.0.0.1:1234 -> 10.0.0.2:80 IPP 6; Instance load: 50%; Connection instance load 80%; StartTime: 16/12/25 10:00:00; Duration: 3; IdentificationTime: 16/12/25 10:00:00; Seervice: 6:80; Total Bytes: 5000;'''
+    'heavy_conn': '''[fw_60]; conn: 192.168.1.1:3788 -> 192.168.1.3:8080 IPP 6; Instance load: 68%; Connection instance load 91%; StartTime: 17/12/25 03:18:18; Duration: 3; IdentificationTime: 17/12/25 03:18:19; Seervice: 6:8080; Total Bytes: 1123534;'''
 }
 
+COLORS = {
+    'red': '\033[91m',
+    'green': '\033[92m',
+    'yellow': '\033[93m',
+    'cyan': '\033[96m',
+    'magenta': '\033[95m',
+    'reset': '\033[0m'
+}
+
+def print_color(text: str, color: str, quiet: bool = False):
+    """Print colorized output to terminal."""
+    if quiet and color != 'red':
+        return
+    if sys.stdout.isatty():
+        print(f"{COLORS.get(color, '')}{text}{COLORS['reset']}")
+    else:
+        print(text)
+
+def print_banner(config: dict, args: argparse.Namespace):
+    """Print the standard startup banner."""
+    if args.quiet:
+        return
+    mode = "MOCK RUN" if args.mock else "DRY RUN" if args.dry_run else "NORMAL RUN"
+    print_color("==================================================", 'cyan')
+    print_color(f"  Overview Dashboard - Checkpoint Agent", 'cyan')
+    print_color(f"  Mode:         {mode}", 'yellow')
+    print_color(f"  System Name:  {config['systemName']}", 'cyan')
+    print_color(f"  Project Name: {config['projectName']}", 'cyan')
+    print_color(f"  API URL:      {config['apiUrl']}", 'cyan')
+    print_color("==================================================", 'cyan')
+
 def run_command(command: List[str], mock: bool = False, mock_key: str = None) -> str:
-    """
-    Run a system command and return stdout.
-    If mock is True, returns mock data based on mock_key.
-    """
     if mock:
         return MOCK_DATA.get(mock_key, "")
-    
     try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
         return result.stdout.strip()
-    except Exception as e:
-        # Don't print error here, let caller handle empty output
+    except Exception:
         return ""
 
 def get_cpu_usage(mock: bool = False, warning_threshold: int = 80) -> Tuple[float, float, List[str]]:
-    """
-    Get current CPU usage percentage, max CPU usage, and list of heavy load CPUs.
-    Uses 'cpstat os -f multi_cpu' on Checkpoint.
-    Returns: (average_usage, max_usage, list_of_heavy_cpus)
-    """
     heavy_cpus = []
     avg_usage = 0.0
     max_usage = 0.0
-    
     try:
-        # Try cpstat multi_cpu
         output = run_command(['cpstat', 'os', '-f', 'multi_cpu'], mock, 'multi_cpu')
-        
         cpus = []
-        # Parse table format: |CPU#|...|Usage(%)|...
         lines = output.strip().split('\n')
         for line in lines:
             line = line.strip()
-            # Skip headers/separators
             if not line.startswith('|') or 'CPU#' in line:
                 continue
-                
             parts = line.split('|')
-            # Expected split: ['', 'CPU#', 'User', 'Sys', 'Idle', 'Usage', 'Run', 'Int', '']
             if len(parts) >= 6:
                 try:
                     cpu_id = parts[1].strip()
@@ -118,13 +114,11 @@ def get_cpu_usage(mock: bool = False, warning_threshold: int = 80) -> Tuple[floa
                         heavy_cpus.append(f"CPU{cpu_id}: {usage}%")
                 except (ValueError, IndexError):
                     continue
-        
         if cpus:
             avg_usage = round(sum(cpus) / len(cpus), 2)
             max_usage = max(cpus)
             return avg_usage, max_usage, heavy_cpus
-
-        # Fallback to single CPU check if multi_cpu fails or returns nothing
+        
         output = run_command(['cpstat', 'os', '-f', 'cpu'], mock, 'cpu')
         match = re.search(r'CPU Usage\s*:\s*(\d+)', output)
         if match:
@@ -132,382 +126,228 @@ def get_cpu_usage(mock: bool = False, warning_threshold: int = 80) -> Tuple[floa
             if usage >= warning_threshold:
                 heavy_cpus.append(f"CPU: {usage}%")
             return usage, usage, heavy_cpus
-            
-        # Fallback to /proc/stat if cpstat fails (Gaia is Linux)
-        if not mock and os.path.exists('/proc/stat'):
-            with open('/proc/stat', 'r') as f:
-                line = f.readline()
-                fields = line.split()
-                idle1 = int(fields[4])
-                total1 = sum(int(x) for x in fields[1:])
-                
-                import time
-                time.sleep(1)
-                
-                with open('/proc/stat', 'r') as f:
-                    line = f.readline()
-                    fields = line.split()
-                    idle2 = int(fields[4])
-                    total2 = sum(int(x) for x in fields[1:])
-                
-                idle_delta = idle2 - idle1
-                total_delta = total2 - total1
-                
-                if total_delta > 0:
-                    usage = round((1 - (idle_delta / total_delta)) * 100, 2)
-                    if usage >= warning_threshold:
-                        heavy_cpus.append(f"CPU: {usage}%")
-                    return usage, usage, heavy_cpus
-                    
     except Exception:
         pass
-        
     return 0.0, 0.0, []
 
 def get_memory_usage(mock: bool = False) -> Tuple[float, int, int]:
-    """
-    Get current memory usage percentage and details.
-    Uses 'cpstat os -f memory' on Checkpoint.
-    Returns: (used_percent, total_bytes, free_bytes)
-    """
     try:
         output = run_command(['cpstat', 'os', '-f', 'memory'], mock, 'memory')
-        
-        # Parse cpstat output
-        # Look for "Total Real Memory (Bytes): X" and "Free Real Memory (Bytes): Y"
         total_match = re.search(r'Total Real Memory \(Bytes\)\s*:\s*(\d+)', output)
         free_match = re.search(r'Free Real Memory \(Bytes\)\s*:\s*(\d+)', output)
-        
         if total_match and free_match:
             total_bytes = int(total_match.group(1))
             free_bytes = int(free_match.group(1))
-            
             if total_bytes > 0:
-                used_bytes = total_bytes - free_bytes
-                used_percent = round((used_bytes / total_bytes) * 100, 2)
+                used_percent = round(((total_bytes - free_bytes) / total_bytes) * 100, 2)
                 return used_percent, total_bytes, free_bytes
-                
-        # Fallback to old format or other methods if needed
-        # Example: Total Memory: 8192MB\nUsed Memory: 4096MB
-        total_match = re.search(r'Total Memory\s*:\s*(\d+)', output)
-        used_match = re.search(r'Used Memory\s*:\s*(\d+)', output)
-        
-        if total_match and used_match:
-            total_mb = float(total_match.group(1))
-            used_mb = float(used_match.group(1))
-            if total_mb > 0:
-                used_percent = round((used_mb / total_mb) * 100, 2)
-                total_bytes = int(total_mb * 1024 * 1024)
-                free_bytes = int((total_mb - used_mb) * 1024 * 1024)
-                return used_percent, total_bytes, free_bytes
-                
     except Exception:
         pass
-        
     return 0.0, 0, 0
 
 def get_cluster_state(mock: bool = False) -> str:
-    """
-    Get Checkpoint ClusterXL state.
-    Uses 'cphaprob state'.
-    """
     try:
         output = run_command(['cphaprob', 'state'], mock, 'cluster')
-        
-        # Look for "State: Active" or "State: Standby" or "State: Down" (Old format)
         match = re.search(r'State:\s*(.+)', output)
         if match:
             return match.group(1).strip()
-            
-        # Parse table format (New format)
-        # Look for the line with "(local)" and extract the state (last column)
-        # Example: 1 (local)  10.231.149.1    100%            ACTIVE
         for line in output.split('\n'):
             if '(local)' in line:
                 parts = line.split()
                 if parts:
-                    state = parts[-1]
-                    # Convert ACTIVE -> Active, STANDBY -> Standby
-                    return state.capitalize()
-
-        # Fallback
+                    return parts[-1].capitalize()
         if "Active" in output:
             return "Active"
         elif "Standby" in output:
             return "Standby"
-            
     except Exception:
         pass
-        
     return "Unknown"
 
 def get_errors(mock: bool = False) -> List[str]:
-    """
-    Check for errors reported by the firewall.
-    Uses 'cphaprob list' to check for critical devices.
-    """
     errors = []
     try:
         output = run_command(['cphaprob', 'list'], mock, 'cphaprob_list')
-        
-        # Parse output for devices not in 'OK' state
-        # Format: Device Name: X\nState: Y
         devices = output.split('\n\n')
         for device in devices:
             name_match = re.search(r'Device Name:\s*(.+)', device)
             state_match = re.search(r'State:\s*(.+)', device)
-            
             if name_match and state_match:
                 name = name_match.group(1).strip()
                 state = state_match.group(1).strip()
-                
                 if state != 'OK':
                     errors.append(f"{name}: {state}")
-                    
     except Exception:
         pass
-        
     return errors
 
 def get_heavy_connections(mock: bool = False) -> List[str]:
-    """
-    Check for heavy connections from today.
-    Uses 'fw ctl multik print_heavy_conn'.
-    """
     heavy_conns = []
     try:
-        # Get today's date in DD/MM/YY format
         from datetime import datetime
         today_str = datetime.now().strftime("%d/%m/%y")
-        
-        # In mock mode, we might need to adjust the date to match the mock data
-        # or adjust the mock data to match today. 
-        # For simplicity, let's assume the mock data has a specific date we look for,
-        # OR we can just use the current date in the mock check if we were generating it dynamically.
-        # But since MOCK_DATA is static, let's just check for the date present in MOCK_DATA if mock=True
         if mock:
-             # For testing purposes, let's assume "today" is 17/12/25 based on the user request example
              today_str = "17/12/25"
-
         output = run_command(['fw', 'ctl', 'multik', 'print_heavy_conn'], mock, 'heavy_conn')
-        
         if not output:
             return []
-            
         lines = output.strip().split('\n')
-        # Get last 5 lines
         last_5_lines = lines[-5:]
-        
         for line in last_5_lines:
             if today_str in line:
                 heavy_conns.append(line.strip())
-                
     except Exception:
         pass
-        
     return heavy_conns
 
 def calculate_severity(
-    cpu_usage: float,
-    max_cpu_usage: float,
-    memory_usage: float,
-    cluster_state: str,
-    errors: List[str],
-    heavy_connections: List[str],
-    warning_threshold: int,
-    error_threshold: int
+    cpu_usage: float, max_cpu_usage: float, memory_usage: float,
+    cluster_state: str, errors: List[str], heavy_connections: List[str],
+    warning_threshold: int, error_threshold: int
 ) -> str:
-    """
-    Calculate overall severity based on metrics.
-    """
     severity = 'ok'
-    
-    # Check CPU (Average or Max)
     if cpu_usage >= error_threshold or max_cpu_usage >= error_threshold:
         severity = 'error'
     elif (cpu_usage >= warning_threshold or max_cpu_usage >= warning_threshold) and severity != 'error':
         severity = 'warning'
-    
-    # Check Memory
+        
     if memory_usage >= error_threshold:
         severity = 'error'
     elif memory_usage >= warning_threshold and severity != 'error':
         severity = 'warning'
         
-    # Check Cluster State (Down is bad)
     if cluster_state.lower() in ['down', 'problem', 'error', 'unknown']:
         severity = 'error'
-        
-    # Check Errors
     if errors:
         severity = 'error'
-        
-    # Check Heavy Connections
     if heavy_connections:
         severity = 'error'
         
     return severity
 
 def get_hostname() -> str:
-    """Get the system hostname."""
     try:
         return socket.gethostname()
     except Exception:
         return "checkpoint-fw"
 
-def build_payload(
-    cpu_usage: float,
-    heavy_cpus: List[str],
-    memory_usage: float,
-    total_mem_bytes: int,
-    free_mem_bytes: int,
-    cluster_state: str,
-    errors: List[str],
-    heavy_connections: List[str],
-    severity: str,
-    project_name: str,
-    system_name: str
-) -> Dict:
-    """Build the JSON payload."""
-    hostname = get_hostname()
-    
-    # Format errors string
-    error_str = "No Errors"
-    if errors:
-        error_str = ", ".join(errors)
-        
-    # Format CPU string
-    cpu_str = f"{cpu_usage}%"
-    if heavy_cpus:
-        cpu_str += f" (Heavy: {', '.join(heavy_cpus)})"
-        
-    # Format Memory string
-    # Free: X GB (Y%)
-    free_gb = round(free_mem_bytes / (1024**3), 3)
-    free_percent = 0.0
-    if total_mem_bytes > 0:
-        free_percent = round((free_mem_bytes / total_mem_bytes) * 100, 3)
-        
-    mem_str = f"Free: {free_gb:.3f}GB ({free_percent:.3f}%)"
-    
-    # Format Heavy Connections
-    heavy_conn_str = "None"
-    if heavy_connections:
-        heavy_conn_str = f"{len(heavy_connections)} found"
-        
-    return {
-        'projectName': project_name,
-        'systemName': system_name,
-        'payload': {
-            'Id': hostname,
-            'Name': hostname,
-            'CPU': cpu_str,
-            'Memory': mem_str,
-            'Cluster State': cluster_state,
-            'Errors': error_str,
-            'Heavy Connections': heavy_conn_str,
-            'Severity': severity
-        }
-    }
+def generate_md5_id(system_name: str, project_name: str, hostname: str) -> str:
+    unique_string = f"{system_name}-{project_name}-{hostname}".encode('utf-8')
+    return hashlib.md5(unique_string).hexdigest()
 
-def print_colored(text: str, color: str):
-    """Print colored text to terminal."""
-    colors = {
-        'red': '\033[91m',
-        'green': '\033[92m',
-        'yellow': '\033[93m',
-        'cyan': '\033[96m',
-        'reset': '\033[0m'
-    }
-    if sys.stdout.isatty():
-        print(f"{colors.get(color, '')}{text}{colors['reset']}")
-    else:
-        print(text)
+def post_to_api(payload: dict, config: dict, args: argparse.Namespace):
+    if args.dry_run:
+        print_color(f"[DRY-RUN] Would post: {payload['payload']['Name']} ({payload['payload']['Severity']})", 'magenta', args.quiet)
+        return
+
+    json_data = json.dumps(payload).encode('utf-8')
+    request = urllib.request.Request(
+        config['apiUrl'],
+        data=json_data,
+        headers={'Content-Type': 'application/json', 'Accept': 'application/json'},
+        method='POST'
+    )
+    
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    try:
+        with urllib.request.urlopen(request, timeout=10, context=ctx) as response:
+            if response.status in [200, 201]:
+                print_color(f"[SUCCESS] Posted {payload['payload']['Name']} - {payload['payload']['Severity']}", 'green', args.quiet)
+            else:
+                print_color(f"[WARNING] API returned status {response.status} for {payload['payload']['Name']}", 'yellow', args.quiet)
+    except Exception as e:
+        print_color(f"[ERROR] Failed to post {payload['payload']['Name']}: {str(e)}", 'red')
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Gather Checkpoint firewall metrics'
-    )
-    parser.add_argument('--threshold-warning', type=int, default=85)
-    parser.add_argument('--threshold-error', type=int, default=95)
-    parser.add_argument('--project-name', type=str, default='Firewalls')
-    parser.add_argument('--system-name', type=str, default='Checkpoint')
-    parser.add_argument('--json-only', action='store_true', help='Output only JSON')
-    parser.add_argument('--mock', action='store_true', help='Use mock data for testing')
+    parser = argparse.ArgumentParser(description='Checkpoint Firewall Agent')
+    parser.add_argument('--config-path', type=str, default='config.json', help='Path to config.json')
+    parser.add_argument('--api-url', type=str, help='Override API URL')
+    parser.add_argument('--project-name', type=str, help='Override Project Name')
+    parser.add_argument('--system-name', type=str, help='Override System Name')
+    parser.add_argument('--ttl', type=int, help='Override TTL')
+    parser.add_argument('--dry-run', action='store_true', help='Do not post to API')
+    parser.add_argument('--mock', action='store_true', help='Use mock data')
+    parser.add_argument('--quiet', action='store_true', help='Suppress non-error output')
     
     args = parser.parse_args()
+
+    # Load configuration
+    config = {
+        "apiUrl": "https://overview/api/components",
+        "projectName": "Firewalls",
+        "systemName": "Checkpoint",
+        "defaultTTL": 120,
+        "thresholds": {
+            "warning": 80,
+            "error": 90
+        }
+    }
     
+    if os.path.exists(args.config_path):
+        try:
+            with open(args.config_path, 'r') as f:
+                file_config = json.load(f)
+                config.update(file_config)
+        except Exception as e:
+            print_color(f"Error reading config {args.config_path}: {e}", 'red')
+            sys.exit(1)
+
+    if args.api_url: config['apiUrl'] = args.api_url
+    if args.project_name: config['projectName'] = args.project_name
+    if args.system_name: config['systemName'] = args.system_name
+    if args.ttl: config['defaultTTL'] = args.ttl
+
+    print_banner(config, args)
+    
+    warn_thresh = config.get('thresholds', {}).get('warning', 80)
+    err_thresh = config.get('thresholds', {}).get('error', 90)
+
     try:
-        if not args.json_only:
-            print_colored("Gathering Checkpoint metrics...", 'cyan')
-            
-        # Collect metrics
-        cpu_usage, max_cpu_usage, heavy_cpus = get_cpu_usage(args.mock, args.threshold_warning)
+        cpu_usage, max_cpu_usage, heavy_cpus = get_cpu_usage(args.mock, warn_thresh)
         memory_usage, total_mem, free_mem = get_memory_usage(args.mock)
         cluster_state = get_cluster_state(args.mock)
         errors = get_errors(args.mock)
         heavy_connections = get_heavy_connections(args.mock)
         
-        # Calculate severity
         severity = calculate_severity(
-            cpu_usage,
-            max_cpu_usage,
-            memory_usage,
-            cluster_state,
-            errors,
-            heavy_connections,
-            args.threshold_warning,
-            args.threshold_error
+            cpu_usage, max_cpu_usage, memory_usage,
+            cluster_state, errors, heavy_connections,
+            warn_thresh, err_thresh
         )
         
-        # Build payload
-        payload = build_payload(
-            cpu_usage,
-            heavy_cpus,
-            memory_usage,
-            total_mem,
-            free_mem,
-            cluster_state,
-            errors,
-            heavy_connections,
-            severity,
-            args.project_name,
-            args.system_name
-        )
+        hostname = get_hostname()
+        component_id = generate_md5_id(config['systemName'], config['projectName'], hostname)
         
-        # Output
-        if args.json_only:
-            print(json.dumps(payload, indent=2))
-        else:
-            print_colored("\nMetrics Summary:", 'green')
-            print(f"CPU: {cpu_usage}%")
-            if heavy_cpus:
-                print_colored(f"Heavy CPUs: {', '.join(heavy_cpus)}", 'yellow')
+        error_str = "No Errors" if not errors else ", ".join(errors)
+        cpu_str = f"{cpu_usage}%" + (f" (Heavy: {', '.join(heavy_cpus)})" if heavy_cpus else "")
+        free_gb = round(free_mem / (1024**3), 3)
+        free_percent = round((free_mem / total_mem) * 100, 3) if total_mem > 0 else 0.0
+        mem_str = f"Free: {free_gb:.3f}GB ({free_percent:.3f}%)"
+        heavy_conn_str = f"{len(heavy_connections)} found" if heavy_connections else "None"
             
-            # Memory summary
-            free_gb = round(free_mem / (1024**3), 3)
-            free_percent = 0.0
-            if total_mem > 0:
-                free_percent = round((free_mem / total_mem) * 100, 3)
-            print(f"Memory: Free {free_gb:.3f}GB ({free_percent:.3f}%)")
-            
-            print(f"Cluster State: {cluster_state}")
-            print(f"Errors: {len(errors)}")
-            
-            if heavy_connections:
-                print_colored(f"Heavy Connections: {len(heavy_connections)} found", 'red')
-                for conn in heavy_connections:
-                    print(f"  - {conn[:100]}...")
-            else:
-                print("Heavy Connections: None")
-                
-            print_colored(f"Severity: {severity}", 'red' if severity == 'error' else 'green')
-            
-            print_colored("\nJSON Output:", 'cyan')
-            print(json.dumps(payload, indent=2))
-            
+        payload = {
+            'projectName': config['projectName'],
+            'systemName': config['systemName'],
+            'payload': {
+                'Id': component_id,
+                'Name': hostname,
+                'CPU': cpu_str,
+                'Memory': mem_str,
+                'Cluster State': cluster_state,
+                'Errors': error_str,
+                'Heavy Connections': heavy_conn_str,
+                'Severity': severity,
+                'TTL': config['defaultTTL']
+            }
+        }
+        
+        post_to_api(payload, config, args)
+        
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print_color(f"Error: {e}", 'red')
         sys.exit(1)
 
 if __name__ == '__main__':
