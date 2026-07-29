@@ -27,13 +27,17 @@ jobs:
         Copy-Item -Path ./Deploy-WindowsService.ps1 -Destination ./publish/Deploy-WindowsService.ps1
         Copy-Item -Path ./Deploy-WindowsService.bat -Destination ./publish/Deploy-WindowsService.bat
 
-    - name: Create Zip archive
-      run: Compress-Archive -Path ./publish/* -DestinationPath ./OverviewDashboard-win-x64.zip
+    - name: Create Zip archives
+      run: |
+        Compress-Archive -Path ./publish/* -DestinationPath ./OverviewDashboard-win-x64.zip
+        Compress-Archive -Path ./agents/* -DestinationPath ./OverviewDashboard-agents.zip
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: build-${{ github.run_number }}
         name: Build ${{ github.run_number }}
-        files: OverviewDashboard-win-x64.zip
+        files: |
+          OverviewDashboard-win-x64.zip
+          OverviewDashboard-agents.zip
         generate_release_notes: true
