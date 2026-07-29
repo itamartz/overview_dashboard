@@ -224,8 +224,12 @@ Edit the workflow file, modify the `docker run` command:
 docker run -d \
   --name overview-dashboard \
   -e ASPNETCORE_ENVIRONMENT=Production \
-  -e ConnectionStrings__DefaultConnection="your-connection-string" \
-  ...
+  -e ConnectionStrings__DefaultConnection="Data Source=/app/Database/dashboard.db" \
+  -e Dashboard__OfflineThresholdMinutes=60 \
+  -e Dashboard__DeleteThresholdMinutes=129600 \
+  -v /var/overview-dashboard/data:/app/Database \
+  -p 80:8080 \
+  overview-dashboard:latest
 ```
 
 ### Use Docker Compose (Alternative)

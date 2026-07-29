@@ -23,7 +23,9 @@
 param(
     [string]$TargetPath = "C:\Services\OverviewDashboard",
     [string]$ServiceName = "OverviewDashboard",
-    [int]$Port = 5000
+    [int]$Port = 5000,
+    [int]$OfflineThresholdMinutes = 60,
+    [int]$DeleteThresholdMinutes = 129600
 )
 
 $ErrorActionPreference = "Stop"
@@ -68,6 +70,11 @@ $appsettings = @{
     }
     ConnectionStrings = @{
         DefaultConnection = "Data Source=$TargetPath\Database\dashboard.db"
+    }
+    Dashboard         = @{
+        PageSize               = 100
+        OfflineThresholdMinutes = $OfflineThresholdMinutes
+        DeleteThresholdMinutes = $DeleteThresholdMinutes
     }
     AllowedHosts      = "*"
     Kestrel           = @{

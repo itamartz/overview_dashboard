@@ -113,7 +113,7 @@ See `Deploy-WindowsService.ps1` for automated installation.
 
 ## ⚙️ Configuration
 
-### Database Configuration
+### Application & Database Configuration
 
 Edit `OverviewDashboard/appsettings.json`:
 
@@ -121,19 +121,37 @@ Edit `OverviewDashboard/appsettings.json`:
 {
   "ConnectionStrings": {
     "DefaultConnection": "Data Source=Database/dashboard.db"
+  },
+  "Dashboard": {
+    "PageSize": 100,
+    "OfflineThresholdMinutes": 60,
+    "DeleteThresholdMinutes": 129600
   }
 }
 ```
 
-The database is created automatically on first run with sample data.
+#### Settings Description:
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `ConnectionStrings:DefaultConnection` | string | `Data Source=Database/dashboard.db` | SQLite database connection string |
+| `Dashboard:PageSize` | integer | `100` | Number of items per page in paginated dashboard component views |
+| `Dashboard:OfflineThresholdMinutes` | integer | `60` | Fallback threshold (in minutes) after which a component is marked **Offline** if no payload `TTL` is specified |
+| `Dashboard:DeleteThresholdMinutes` | integer | `129600` (90 days) | Data cleanup retention window (in minutes). A background cleanup service runs hourly and deletes components older than this threshold. Set to `<= 0` to disable auto-cleanup. |
 
 ### Environment Variables
 
-You can override settings using environment variables:
+You can override any `appsettings.json` setting using environment variables (ideal for Docker / Linux deployments):
 
 ```bash
 # Database path
 ConnectionStrings__DefaultConnection="Data Source=/custom/path/dashboard.db"
+
+# Offline detection threshold (e.g., 30 minutes)
+Dashboard__OfflineThresholdMinutes=30
+
+# Data retention & automatic cleanup threshold (e.g., 43200 minutes = 30 days)
+Dashboard__DeleteThresholdMinutes=43200
 
 # Logging level
 Logging__LogLevel__Default="Debug"
