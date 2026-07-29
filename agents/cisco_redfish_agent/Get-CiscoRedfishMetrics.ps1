@@ -374,7 +374,7 @@ foreach ($target in $config.targets) {
                             Health = $sHealth
                         }
                         
-                        $scDisplayName = if ($sInfo.ServerResponse.StorageControllers) { $sInfo.ServerResponse.StorageControllers.Name } else { $sInfo.ServerResponse.Name }
+                        $scDisplayName = if ($sInfo.ServerResponse.StorageControllers) { $sInfo.ServerResponse.StorageControllers.MemberId } else { $sInfo.ServerResponse.Id }
                         Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'StorageController' -Name $scDisplayName -Metric 'StorageHealth' -Severity $severity -Status "Health: $sHealth" -TTL $defaultTTL -ExtraData $extraDataSC
                         
                         # Disks
