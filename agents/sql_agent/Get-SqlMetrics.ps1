@@ -35,132 +35,10 @@ param(
     [switch]$MockRun
 )
 
+# Shared functions: Send-ToApi, Get-CyberArkCredential, Get-EncryptedCredential, Resolve-Credential, Install-ModuleIfNeeded
+Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
+
 #region Helper Functions
-
-function Test-DbaToolsInstalled {
-    $module = Get-Module -ListAvailable -Name dbatools
-    return $null -ne $module
-}
-
-function Install-DbaToolsIfNeeded {
-    if (-not (Test-DbaToolsInstalled)) {
-        Write-Host "dbatools module not found. Attempting to install..." -ForegroundColor Yellow
-        try {
-            Install-Module -Name dbatools -Force -Scope CurrentUser -AllowClobber
-            Import-Module dbatools -Force
-            Write-Host "dbatools installed successfully." -ForegroundColor Green
-            return $true
-        }
-        catch {
-            Write-Error "Failed to install dbatools module: $_"
-            Write-Error "Please run: Install-Module -Name dbatools -Force -Scope CurrentUser"
-            return $false
-        }
-    }
-    Import-Module dbatools -Force
-    return $true
-}
-
-function Get-CyberArkCredential {
-    param(
-        [string]$CcpUrl,
-        [string]$AppId,
-        [string]$Safe,
-        [string]$ObjectName,
-        [bool]$VerifySsl = $true,
-        [int]$TimeoutSeconds = 10
-    )
-
-    $queryParams = @(
-        "AppID=$([uri]::EscapeDataString($AppId))",
-        "Safe=$([uri]::EscapeDataString($Safe))",
-        "Object=$([uri]::EscapeDataString($ObjectName))"
-    )
-    $fullUrl = "$CcpUrl`?$($queryParams -join '&')"
-
-    $invokeParams = @{
-        Uri         = $fullUrl
-        Method      = 'GET'
-        ContentType = 'application/json'
-        TimeoutSec  = $TimeoutSeconds
-        ErrorAction = 'Stop'
-    }
-
-    if (-not $VerifySsl) {
-        $invokeParams.SkipCertificateCheck = $true
-    }
-
-    try {
-        $response = Invoke-RestMethod @invokeParams
-        return @{
-            Username = $response.UserName
-            Password = $response.Content
-            Address  = $response.Address
-            Success  = $true
-        }
-    }
-    catch {
-        Write-Warning "CyberArk CCP lookup failed for '$ObjectName' in safe '$Safe': $_"
-        return @{ Username = ""; Password = ""; Address = ""; Success = $false }
-    }
-}
-
-function Get-EncryptedCredential {
-    param(
-        [string]$EncryptedFilePath,
-        [string]$Username
-    )
-
-    if (-not (Test-Path $EncryptedFilePath)) {
-        Write-Warning "Encrypted credential file not found: $EncryptedFilePath"
-        return @{ Username = $Username; Password = ""; Success = $false }
-    }
-
-    try {
-        $secureString = Get-Content $EncryptedFilePath | ConvertTo-SecureString
-        $credential = New-Object System.Management.Automation.PSCredential($Username, $secureString)
-        return @{
-            Username = $Username
-            Password = $credential.GetNetworkCredential().Password
-            Success  = $true
-        }
-    }
-    catch {
-        Write-Warning "Failed to decrypt credential file '$EncryptedFilePath': $_"
-        return @{ Username = $Username; Password = ""; Success = $false }
-    }
-}
-
-function Resolve-Credential {
-    param(
-        [string]$Method,
-        [object]$Config,
-        [object]$CyberArkConfig
-    )
-
-    switch ($Method.ToLower()) {
-        'cyberark' {
-            return Get-CyberArkCredential `
-                -CcpUrl $CyberArkConfig.ccpUrl `
-                -AppId $CyberArkConfig.appId `
-                -Safe $Config.cyberarkSafe `
-                -ObjectName $Config.cyberarkObject `
-                -VerifySsl $CyberArkConfig.verifySsl `
-                -TimeoutSeconds $CyberArkConfig.timeoutSeconds
-        }
-        'encrypted' {
-            $encPath = Join-Path $PSScriptRoot $Config.encryptedPasswordFile
-            return Get-EncryptedCredential -EncryptedFilePath $encPath -Username $Config.username
-        }
-        default {
-            return @{
-                Username = $Config.username
-                Password = $Config.password
-                Success  = ($null -ne $Config.password -and $Config.password -ne "")
-            }
-        }
-    }
-}
 
 function Get-BackupSeverity {
     param(
@@ -210,52 +88,6 @@ function Format-BackupAge {
     }
     else {
         return "$([math]::Floor($timeSpan.TotalMinutes))m ago"
-    }
-}
-
-function Send-ToApi {
-    param(
-        [string]$ApiUrl,
-        [string]$SystemName,
-        [string]$ProjectName,
-        [string]$Name,
-        [string]$Database,
-        [string]$Metric,
-        [string]$Severity,
-        [string]$Status,
-        [int]$TTL
-    )
-    
-    # Generate deterministic ID from key fields (same metric always gets same ID)
-    $idSource = "$SystemName|$ProjectName|$Name|$Database|$Metric"
-    $md5 = [System.Security.Cryptography.MD5]::Create()
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
-    $hash = $md5.ComputeHash($bytes)
-    $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
-    
-    $componentPayload = @{
-        Id       = $componentId
-        Name     = $Name
-        Database = $Database
-        Metric   = $Metric
-        Severity = $Severity
-        Status   = $Status
-        TTL      = $TTL
-    } | ConvertTo-Json -Compress
-
-    $body = @{
-        systemName  = $SystemName
-        projectName = $ProjectName
-        payload     = $componentPayload
-    } | ConvertTo-Json -Compress
-
-    try {
-        Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body -ContentType "application/json" -ErrorAction Stop | Out-Null
-        return $true
-    }
-    catch {
-        Write-Warning "Failed to send to API: $_"
-        return $false
     }
 }
 
@@ -336,7 +168,7 @@ if ($MockRun) {
 
 # Install/Import dbatools if not in dry run or mock run mode
 if (-not $DryRun -and -not $MockRun) {
-    if (-not (Install-DbaToolsIfNeeded)) {
+    if (-not (Install-ModuleIfNeeded -ModuleName dbatools)) {
         exit 1
     }
 }

@@ -22,6 +22,9 @@ param(
     [switch]$MockRun
 )
 
+# Shared functions: Send-ToApi
+Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
+
 # 1. PRINT BANNER
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host "         Overview Dashboard Agent            " -ForegroundColor Cyan
@@ -151,12 +154,6 @@ $payloadDict = @{
     TTL      = $defaultTTL
 }
 
-$body = @{
-    systemName  = $systemName
-    projectName = $projectName
-    payload     = ($payloadDict | ConvertTo-Json -Compress)
-} | ConvertTo-Json -Compress -Depth 10
-
 # 10. LOG RESULTS
 Write-Host "`nSystem Metrics Summary:" -ForegroundColor Green
 
@@ -184,15 +181,6 @@ Write-Host "`nOverall Severity: $severity" -ForegroundColor $sevColor
 Write-Host "`nPayload ID: $componentId" -ForegroundColor Cyan
 
 # 9. SEND TO API
-if ($DryRun) {
-    Write-Host "`n[DRY RUN] Skipping API POST." -ForegroundColor Yellow
-    Write-Host "Payload JSON:`n$body" -ForegroundColor Gray
-} else {
-    Write-Host "`nPosting to API: $apiUrl" -ForegroundColor Cyan
-    try {
-        $response = Invoke-RestMethod -Uri $apiUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 15 -ErrorAction Stop
-        Write-Host "[SUCCESS] Metrics posted successfully." -ForegroundColor Green
-    } catch {
-        Write-Host "[ERROR] Failed to post to API: $_" -ForegroundColor Red
-    }
-}
+if (-not $DryRun) { Write-Host "`nPosting to API: $apiUrl" -ForegroundColor Cyan }
+Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+    -Payload ($payloadDict | ConvertTo-Json -Compress) -DryRun:$DryRun

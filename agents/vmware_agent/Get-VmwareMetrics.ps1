@@ -5,88 +5,10 @@ param(
     [switch]$MockRun
 )
 
+# Shared functions: Send-ToApi, Get-CyberArkCredential, Get-X509Certificate2Web
+Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
+
 # --- Common Functions ---
-function Get-CyberArkCredential {
-    param(
-        [string]$CcpUrl,
-        [string]$AppId,
-        [string]$Safe,
-        [string]$ObjectName,
-        [bool]$VerifySsl = $true,
-        [int]$TimeoutSeconds = 10
-    )
-
-    $queryParams = @(
-        "AppID=$([uri]::EscapeDataString($AppId))",
-        "Safe=$([uri]::EscapeDataString($Safe))",
-        "Object=$([uri]::EscapeDataString($ObjectName))"
-    )
-    $fullUrl = "$CcpUrl`?$($queryParams -join '&')"
-
-    $invokeParams = @{
-        Uri         = $fullUrl
-        Method      = 'GET'
-        ContentType = 'application/json'
-        TimeoutSec  = $TimeoutSeconds
-        ErrorAction = 'Stop'
-    }
-
-    if (-not $VerifySsl) {
-        $invokeParams.SkipCertificateCheck = $true
-    }
-
-    try {
-        $response = Invoke-RestMethod @invokeParams
-        return @{
-            Username = $response.UserName
-            Password = $response.Content
-            Address  = $response.Address
-            Success  = $true
-        }
-    }
-    catch {
-        Write-Warning "CyberArk CCP lookup failed for '$ObjectName' in safe '$Safe': $_"
-        return @{
-            Username = ""
-            Password = ""
-            Address  = ""
-            Success  = $false
-        }
-    }
-}
-
-function Send-ToApi {
-    param(
-        [string]$ApiUrl,
-        [string]$SystemName,
-        [string]$ProjectName,
-        [object]$Payload,
-        [switch]$DryRun
-    )
-
-    $body = @{
-        systemName  = $SystemName
-        projectName = $ProjectName
-        payload     = $Payload
-    }
-
-    $jsonBody = $body | ConvertTo-Json -Depth 10
-
-    if ($DryRun) {
-        Write-Host "[DRY-RUN] Would send to $ApiUrl" -ForegroundColor Cyan
-        Write-Host "Project: $ProjectName | Component: $($Payload.Name) | Severity: $($Payload.Severity)" -ForegroundColor Gray
-        return
-    }
-
-    try {
-        Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $jsonBody -ContentType "application/json" -TimeoutSec 15 | Out-Null
-        Write-Host "Successfully posted $($Payload.Name) to $ProjectName" -ForegroundColor Green
-    }
-    catch {
-        Write-Error "Failed to post to API: $_"
-    }
-}
-
 function Compare-Severity {
     param([String]$Current, [String]$New)
     $dicSeverity = @{ Info=0; Ok=1; Warning=2; Error=3 }
@@ -106,19 +28,6 @@ function Disconnect-VCenter {
         Disconnect-VIServer -Server $global:DefaultVIServer -Confirm:$false -Force
         $global:DefaultVIServer = $null
     }
-}
-
-function Get-X509Certificate2Web {
-    param([String]$ComputerName, [String]$HttpsPort = '443')
-    try {
-        $tcpClinet = [System.Net.Sockets.TcpClient]::new($ComputerName, $HttpsPort)
-        $sslStram  = [System.Net.Security.SslStream]::new($tcpClinet.GetStream(), $false, {param ($s,$c,$ch,$e)return $true})
-        $sslStram.AuthenticateAsClient($ComputerName)
-        $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($sslStram.RemoteCertificate)
-        $sslStram.Dispose()
-        $tcpClinet.Dispose()
-        Write-Output $cert
-    } catch { }
 }
 
 function Get-TimeAgoString {

@@ -29,160 +29,10 @@ param(
     [switch]$MockRun
 )
 
+# Shared functions: Send-ToApi, Get-CyberArkCredential, Resolve-Credential, Get-X509Certificate2Web
+Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
+
 #region Helper Functions
-
-function Send-ToApi {
-    param(
-        [string]$ApiUrl,
-        [string]$SystemName,
-        [string]$ProjectName,
-        [string]$Name,
-        [string]$Metric,
-        [string]$Severity,
-        [string]$Status,
-        [int]$TTL,
-        [hashtable]$ExtraData = @{}
-    )
-
-    if ($DryRun) {
-        Write-Host "[DRY RUN] Would send to API: System='$SystemName', Project='$ProjectName', Name='$Name', Metric='$Metric', Severity='$Severity', Status='$Status'" -ForegroundColor Yellow
-        if ($ExtraData.Count -gt 0) {
-            Write-Host "          ExtraData: $($ExtraData | ConvertTo-Json -Compress)" -ForegroundColor Yellow
-        }
-        return $true
-    }
-
-    $idSource = "$SystemName|$ProjectName|$Name|$Metric"
-    $md5 = [System.Security.Cryptography.MD5]::Create()
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
-    $hash = $md5.ComputeHash($bytes)
-    $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
-
-    $componentPayloadObj = @{
-        Id       = $componentId
-        Name     = $Name
-        Metric   = $Metric
-        Severity = $Severity
-        Status   = $Status
-        TTL      = $TTL
-    }
-    
-    foreach ($key in $ExtraData.Keys) {
-        $componentPayloadObj[$key] = $ExtraData[$key]
-    }
-
-    $body = @{
-        systemName  = $SystemName
-        projectName = $ProjectName
-        payload     = $componentPayloadObj
-    } | ConvertTo-Json -Compress
-
-    try {
-        Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body -ContentType "application/json" -ErrorAction Stop | Out-Null
-        return $true
-    }
-    catch {
-        Write-Warning "Failed to send to API: $_"
-        return $false
-    }
-}
-
-function Get-X509Certificate2Web {
-    param([string]$ComputerName)
-    try {
-        $tcpClient = New-Object System.Net.Sockets.TcpClient
-        $tcpClient.Connect($ComputerName, 443)
-        $sslStream = New-Object System.Net.Security.SslStream(
-            $tcpClient.GetStream(), 
-            $false, 
-            {param($sender, $cert, $chain, $errors) return $true}
-        )
-        $sslStream.AuthenticateAsClient($ComputerName)
-        $cert = $sslStream.RemoteCertificate
-        $sslStream.Close()
-        $tcpClient.Close()
-        if ($cert) {
-            return [System.Security.Cryptography.X509Certificates.X509Certificate2]$cert
-        }
-    } catch { }
-    return $null
-}
-
-function Get-CyberArkCredential {
-    param(
-        [string]$CcpUrl,
-        [string]$AppId,
-        [string]$Safe,
-        [string]$ObjectName,
-        [bool]$VerifySsl = $true,
-        [int]$TimeoutSeconds = 10
-    )
-
-    $queryParams = @(
-        "AppID=$([uri]::EscapeDataString($AppId))",
-        "Safe=$([uri]::EscapeDataString($Safe))",
-        "Object=$([uri]::EscapeDataString($ObjectName))"
-    )
-    $fullUrl = "$CcpUrl`?$($queryParams -join '&')"
-
-    $invokeParams = @{
-        Uri         = $fullUrl
-        Method      = 'GET'
-        ContentType = 'application/json'
-        TimeoutSec  = $TimeoutSeconds
-        ErrorAction = 'Stop'
-    }
-
-    if (-not $VerifySsl) {
-        $invokeParams.SkipCertificateCheck = $true
-    }
-
-    try {
-        $response = Invoke-RestMethod @invokeParams
-        return @{
-            Username = $response.UserName
-            Password = $response.Content
-            Address  = $response.Address
-            Success  = $true
-        }
-    }
-    catch {
-        Write-Warning "CyberArk CCP lookup failed for '$ObjectName' in safe '$Safe': $_"
-        return @{
-            Username = ""
-            Password = ""
-            Address  = ""
-            Success  = $false
-        }
-    }
-}
-
-function Resolve-Credential {
-    param(
-        [string]$Method,
-        [object]$Target,
-        [object]$CyberArkConfig
-    )
-
-    switch ($Method.ToLower()) {
-        'cyberark' {
-            return Get-CyberArkCredential `
-                -CcpUrl $CyberArkConfig.ccpUrl `
-                -AppId $CyberArkConfig.appId `
-                -Safe $Target.cyberarkSafe `
-                -ObjectName $Target.cyberarkObject `
-                -VerifySsl $CyberArkConfig.verifySsl `
-                -TimeoutSeconds $CyberArkConfig.timeoutSeconds
-        }
-        default {
-            return @{
-                Username = $Target.username
-                Password = $Target.password
-                Success  = ($null -ne $Target.password -and $Target.password -ne "")
-            }
-        }
-    }
-}
 
 function Connect-Redfish {
     param([string]$ServerName, [string]$Username, [string]$Password)
@@ -273,20 +123,20 @@ foreach ($target in $config.targets) {
 
     if ($MockRun) {
         $severity = if ((Get-Random -Max 100) -gt 90) { "error" } else { "ok" }
-        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'SystemHealth' -Name $serverName -Metric 'Health' -Severity $severity -Status "Mock Health" -TTL $defaultTTL
+        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'SystemHealth' -Name $serverName -Metric 'Health' -Severity $severity -Status "Mock Health" -TTL $defaultTTL -DryRun:$DryRun
         continue
     }
 
     if (-not $DryRun) {
         $cred = Resolve-Credential -Method $credMethod -Target $target -CyberArkConfig $config.cyberark
         if (-not $cred.Success) {
-            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name $serverName -Metric "Credential" -Severity "error" -Status "Failed to retrieve credentials" -TTL $defaultTTL
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name $serverName -Metric "Credential" -Severity "error" -Status "Failed to retrieve credentials" -TTL $defaultTTL -DryRun:$DryRun
             continue
         }
 
         $conn = Connect-Redfish -ServerName $serverName -Username $cred.Username -Password $cred.Password
         if ($conn.IsError) {
-            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name $serverName -Metric "Connection" -Severity "error" -Status "Connection failed" -TTL $defaultTTL
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name $serverName -Metric "Connection" -Severity "error" -Status "Connection failed" -TTL $defaultTTL -DryRun:$DryRun
             continue
         }
 
@@ -325,7 +175,7 @@ foreach ($target in $config.targets) {
                     Certificate = $certSeverity
                 }
 
-                Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'CIMC' -Name $sysInfo.ServerResponse.Name -Metric 'SystemHealth' -Severity $severity -Status "Health: $sysHealth" -TTL $defaultTTL -ExtraData $extraData
+                Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'CIMC' -Name $sysInfo.ServerResponse.Name -Metric 'SystemHealth' -Severity $severity -Status "Health: $sysHealth" -TTL $defaultTTL -ExtraData $extraData -DryRun:$DryRun
             }
         }
 
@@ -349,7 +199,7 @@ foreach ($target in $config.targets) {
                             Health = $pHealth
                         }
 
-                        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Processor' -Name $pInfo.ServerResponse.Name -Metric 'ProcessorHealth' -Severity $severity -Status "Health: $pHealth" -TTL $defaultTTL -ExtraData $extraData
+                        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Processor' -Name $pInfo.ServerResponse.Name -Metric 'ProcessorHealth' -Severity $severity -Status "Health: $pHealth" -TTL $defaultTTL -ExtraData $extraData -DryRun:$DryRun
                     }
                 }
             }
@@ -375,7 +225,7 @@ foreach ($target in $config.targets) {
                         }
                         
                         $scDisplayName = if ($sInfo.ServerResponse.StorageControllers) { $sInfo.ServerResponse.StorageControllers.MemberId } else { $sInfo.ServerResponse.Id }
-                        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'StorageController' -Name $scDisplayName -Metric 'StorageHealth' -Severity $severity -Status "Health: $sHealth" -TTL $defaultTTL -ExtraData $extraDataSC
+                        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'StorageController' -Name $scDisplayName -Metric 'StorageHealth' -Severity $severity -Status "Health: $sHealth" -TTL $defaultTTL -ExtraData $extraDataSC -DryRun:$DryRun
                         
                         # Disks
                         foreach ($drive in $sInfo.ServerResponse.Drives) {
@@ -403,7 +253,7 @@ foreach ($target in $config.targets) {
                                     Health = $dHealth
                                 }
 
-                                Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Disks' -Name $dInfo.ServerResponse.Name -Metric 'DiskHealth' -Severity $severity -Status "Health: $dHealth" -TTL $defaultTTL -ExtraData $extraDataDisk
+                                Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Disks' -Name $dInfo.ServerResponse.Name -Metric 'DiskHealth' -Severity $severity -Status "Health: $dHealth" -TTL $defaultTTL -ExtraData $extraDataDisk -DryRun:$DryRun
                             }
                         }
                     }
@@ -431,7 +281,7 @@ foreach ($target in $config.targets) {
                                 Health = $tHealth
                             }
                             
-                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Temperature' -Name $temp.Name -Metric 'TempHealth' -Severity $severity -Status "$($temp.ReadingCelsius) C" -TTL $defaultTTL -ExtraData $extraDataTemp
+                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Temperature' -Name $temp.Name -Metric 'TempHealth' -Severity $severity -Status "$($temp.ReadingCelsius) C" -TTL $defaultTTL -ExtraData $extraDataTemp -DryRun:$DryRun
                         }
                         foreach ($fan in $thermal.ServerResponse.Fans | Where-Object { $_.Status.Health }) {
                             $fHealth = $fan.Status.Health
@@ -444,7 +294,7 @@ foreach ($target in $config.targets) {
                                 Health = $fHealth
                             }
 
-                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Fans' -Name $fan.Name -Metric 'FanHealth' -Severity $severity -Status "$($fan.Reading) RPM" -TTL $defaultTTL -ExtraData $extraDataFan
+                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Fans' -Name $fan.Name -Metric 'FanHealth' -Severity $severity -Status "$($fan.Reading) RPM" -TTL $defaultTTL -ExtraData $extraDataFan -DryRun:$DryRun
                         }
                     }
                 }
@@ -464,7 +314,7 @@ foreach ($target in $config.targets) {
                                 Health = $pHealth
                             }
 
-                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'PowerSupply' -Name $psu.Name -Metric 'PowerHealth' -Severity $severity -Status "$($psu.PowerInputWatts) W" -TTL $defaultTTL -ExtraData $extraDataPower
+                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'PowerSupply' -Name $psu.Name -Metric 'PowerHealth' -Severity $severity -Status "$($psu.PowerInputWatts) W" -TTL $defaultTTL -ExtraData $extraDataPower -DryRun:$DryRun
                         }
                     }
                 }

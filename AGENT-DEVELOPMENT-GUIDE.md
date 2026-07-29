@@ -1198,52 +1198,42 @@ FOR each metric:
 
 ## 9. The `Send-ToApi` / `post_to_api` Function
 
-### PowerShell Template
+### PowerShell: use the shared module
+
+PowerShell agents must NOT define their own `Send-ToApi`. Import the shared module instead:
 
 ```powershell
-function Send-ToApi {
-    param(
-        [string]$ApiUrl,
-        [string]$SystemName,
-        [string]$ProjectName,
-        [string]$Name,
-        [string]$Metric,
-        [string]$Severity,
-        [string]$Status,
-        [int]$TTL
-    )
+# Shared functions: Send-ToApi, Get-CyberArkCredential, Get-EncryptedCredential,
+# Resolve-Credential, Get-X509Certificate2Web, Install-ModuleIfNeeded
+Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
+```
 
-    # Generate deterministic ID from key fields
-    $idSource = "$SystemName|$ProjectName|$Name|$Metric"
-    $md5 = [System.Security.Cryptography.MD5]::Create()
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
-    $hash = $md5.ComputeHash($bytes)
-    $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
+> **Deployment note:** when copying an agent to a target machine, copy the
+> `agents\shared\` folder alongside the agent folder so the relative
+> `..\shared\functions.psm1` path resolves.
 
-    $componentPayload = @{
-        Id       = $componentId
-        Name     = $Name
-        Metric   = $Metric
-        Severity = $Severity
-        Status   = $Status
-        TTL      = $TTL
-    } | ConvertTo-Json -Compress
+The shared `Send-ToApi` supports all agent needs:
 
-    $body = @{
-        systemName  = $SystemName
-        projectName = $ProjectName
-        payload     = $componentPayload
-    } | ConvertTo-Json -Compress
+```powershell
+# Standard metric
+Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+    -Name $name -Metric "CPU" -Severity "ok" -Status "42%" -TTL $defaultTTL
 
-    try {
-        Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body `
-            -ContentType "application/json" -ErrorAction Stop | Out-Null
-        return $true
-    }
-    catch {
-        Write-Warning "Failed to send to API: $_"
-        return $false
-    }
+# Optional extras:
+#   -Database <string>        included in the deterministic Id and payload (SQL agent)
+#   -ExtraData <hashtable|psobject>  extra fields merged into the payload (alias: -ExtraFields)
+#   -DryRun                   prints the JSON body instead of posting
+#   -Payload <object>         raw payload mode - send a caller-built payload as-is (VMware agent)
+```
+
+It generates a deterministic component Id (MD5 of `SystemName|ProjectName|Name|Metric`,
+with `Database` inserted before `Metric` when supplied) and posts this body:
+
+```json
+{
+  "systemName": "My System",
+  "projectName": "My Project",
+  "payload": "{\"Id\":\"<md5>\",\"Name\":\"host01\",\"Metric\":\"CPU\",\"Severity\":\"ok\",\"Status\":\"42%\",\"TTL\":120}"
 }
 ```
 
@@ -1659,51 +1649,11 @@ param(
     [switch]$MockRun
 )
 
+# Shared functions: Send-ToApi, Get-CyberArkCredential, Get-EncryptedCredential,
+# Resolve-Credential, Get-X509Certificate2Web, Install-ModuleIfNeeded
+Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
+
 #region Helper Functions
-
-function Send-ToApi {
-    param(
-        [string]$ApiUrl,
-        [string]$SystemName,
-        [string]$ProjectName,
-        [string]$Name,
-        [string]$Metric,
-        [string]$Severity,
-        [string]$Status,
-        [int]$TTL
-    )
-
-    $idSource = "$SystemName|$ProjectName|$Name|$Metric"
-    $md5 = [System.Security.Cryptography.MD5]::Create()
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
-    $hash = $md5.ComputeHash($bytes)
-    $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
-
-    $componentPayload = @{
-        Id       = $componentId
-        Name     = $Name
-        Metric   = $Metric
-        Severity = $Severity
-        Status   = $Status
-        TTL      = $TTL
-    } | ConvertTo-Json -Compress
-
-    $body = @{
-        systemName  = $SystemName
-        projectName = $ProjectName
-        payload     = $componentPayload
-    } | ConvertTo-Json -Compress
-
-    try {
-        Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body `
-            -ContentType "application/json" -ErrorAction Stop | Out-Null
-        return $true
-    }
-    catch {
-        Write-Warning "Failed to send to API: $_"
-        return $false
-    }
-}
 
 # TODO: Add your metric collection functions here
 # function Get-YourMetric { ... }

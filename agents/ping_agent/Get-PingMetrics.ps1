@@ -57,50 +57,8 @@ Write-Host "Mode:         $mode" -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host ""
 
-function Send-ToApi {
-    param(
-        [string]$ApiUrl,
-        [string]$SystemName,
-        [string]$ProjectName,
-        [string]$Name,
-        [string]$Metric,
-        [string]$Severity,
-        [string]$Status,
-        [int]$TTL
-    )
-
-    # Generate deterministic ID from key fields
-    $idSource = "$SystemName|$ProjectName|$Name|$Metric"
-    $md5 = [System.Security.Cryptography.MD5]::Create()
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
-    $hash = $md5.ComputeHash($bytes)
-    $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
-
-    $componentPayload = @{
-        Id       = $componentId
-        Name     = $Name
-        Metric   = $Metric
-        Severity = $Severity
-        Status   = $Status
-        TTL      = $TTL
-    } | ConvertTo-Json -Compress
-
-    $body = @{
-        systemName  = $SystemName
-        projectName = $ProjectName
-        payload     = $componentPayload
-    } | ConvertTo-Json -Compress
-
-    try {
-        Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body `
-            -ContentType "application/json" -ErrorAction Stop | Out-Null
-        return $true
-    }
-    catch {
-        Write-Warning "Failed to send to API: $_"
-        return $false
-    }
-}
+# Shared functions: Send-ToApi
+Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
 
 function Test-Ping {
     param(

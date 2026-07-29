@@ -27,153 +27,8 @@ if ($DryRun) { Write-Host "Mode:    [DRY RUN]" -ForegroundColor Yellow }
 if ($MockRun) { Write-Host "Mode:    [MOCK RUN]" -ForegroundColor Yellow }
 Write-Host "------------------------------------------"
 
-# Helper functions
-function Send-ToApi {
-    param(
-        [string]$ApiUrl,
-        [string]$SystemName,
-        [string]$ProjectName,
-        [string]$Name,
-        [string]$Metric,
-        [string]$Severity,
-        [string]$Status,
-        [int]$TTL
-    )
-
-    $idSource = "$SystemName|$ProjectName|$Name|$Metric"
-    $md5 = [System.Security.Cryptography.MD5]::Create()
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
-    $hash = $md5.ComputeHash($bytes)
-    $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
-
-    $componentPayload = @{
-        Id       = $componentId
-        Name     = $Name
-        Metric   = $Metric
-        Severity = $Severity
-        Status   = $Status
-        TTL      = $TTL
-    } | ConvertTo-Json -Compress
-
-    $body = @{
-        systemName  = $SystemName
-        projectName = $ProjectName
-        payload     = $componentPayload
-    } | ConvertTo-Json -Compress
-
-    if ($DryRun) {
-        Write-Host "[DRY RUN API POST] Name: $Name | Metric: $Metric | Severity: $Severity | Status: $Status"
-        return $true
-    }
-
-    try {
-        Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body `
-            -ContentType "application/json" -ErrorAction Stop | Out-Null
-        return $true
-    }
-    catch {
-        Write-Warning "Failed to send to API: $_"
-        return $false
-    }
-}
-
-function Get-CyberArkCredential {
-    param(
-        [string]$CcpUrl,
-        [string]$AppId,
-        [string]$Safe,
-        [string]$ObjectName,
-        [bool]$VerifySsl = $true,
-        [int]$TimeoutSeconds = 10
-    )
-
-    $queryParams = @(
-        "AppID=$([uri]::EscapeDataString($AppId))",
-        "Safe=$([uri]::EscapeDataString($Safe))",
-        "Object=$([uri]::EscapeDataString($ObjectName))"
-    )
-    $fullUrl = "$CcpUrl`?$($queryParams -join '&')"
-
-    $invokeParams = @{
-        Uri         = $fullUrl
-        Method      = 'GET'
-        ContentType = 'application/json'
-        TimeoutSec  = $TimeoutSeconds
-        ErrorAction = 'Stop'
-    }
-
-    if (-not $VerifySsl) {
-        # PowerShell 7+ skip SSL checks for self-signed certificates
-        $invokeParams.SkipCertificateCheck = $true
-    }
-
-    try {
-        $response = Invoke-RestMethod @invokeParams
-        return @{
-            Username = $response.UserName
-            Password = $response.Content
-            Address  = $response.Address
-            Success  = $true
-        }
-    }
-    catch {
-        Write-Warning "CyberArk CCP lookup failed for '$ObjectName' in safe '$Safe': $_"
-        return @{ Username = ""; Password = ""; Address = ""; Success = $false }
-    }
-}
-
-function Get-EncryptedCredential {
-    param(
-        [string]$EncryptedFilePath,
-        [string]$Username
-    )
-    if (-not (Test-Path $EncryptedFilePath)) {
-        return @{ Username = $Username; Password = ""; Success = $false }
-    }
-    try {
-        $secureString = Get-Content $EncryptedFilePath | ConvertTo-SecureString
-        $credential = New-Object System.Management.Automation.PSCredential($Username, $secureString)
-        return @{
-            Username = $Username
-            Password = $credential.GetNetworkCredential().Password
-            Success  = $true
-        }
-    }
-    catch {
-        return @{ Username = $Username; Password = ""; Success = $false }
-    }
-}
-
-function Resolve-Credential {
-    param(
-        [string]$Method,
-        [object]$Target,
-        [object]$CyberArkConfig
-    )
-
-    switch ($Method.ToLower()) {
-        'cyberark' {
-            return Get-CyberArkCredential `
-                -CcpUrl $CyberArkConfig.ccpUrl `
-                -AppId $CyberArkConfig.appId `
-                -Safe $Target.cyberarkSafe `
-                -ObjectName $Target.cyberarkObject `
-                -VerifySsl $CyberArkConfig.verifySsl `
-                -TimeoutSeconds $CyberArkConfig.timeoutSeconds
-        }
-        'encrypted' {
-            $encPath = Join-Path $PSScriptRoot $Target.encryptedPasswordFile
-            return Get-EncryptedCredential -EncryptedFilePath $encPath -Username $Target.username
-        }
-        default {
-            return @{
-                Username = $Target.username
-                Password = $Target.password
-                Success  = ($null -ne $Target.password -and $Target.password -ne "")
-            }
-        }
-    }
-}
+# Shared functions: Send-ToApi, Get-CyberArkCredential, Get-EncryptedCredential, Resolve-Credential
+Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
 
 $credMethod = if ($config.credentialMethod) { $config.credentialMethod } else { "plaintext" }
 
@@ -196,7 +51,7 @@ foreach ($target in $config.targets) {
         if (-not $cred.Success) {
             Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
                 -Name $target.name -Metric "Credential" -Severity "error" `
-                -Status "Failed to retrieve credentials" -TTL $defaultTTL
+                -Status "Failed to retrieve credentials" -TTL $defaultTTL -DryRun:$DryRun
             continue
         }
 
@@ -214,7 +69,7 @@ foreach ($target in $config.targets) {
             $metricName = "$($target.name)-$queueName"
 
             Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-                -Name $queueName -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL
+                -Name $queueName -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL -DryRun:$DryRun
         }
         continue
     }
@@ -252,7 +107,7 @@ foreach ($target in $config.targets) {
                     $metricName = "$($target.name)-$($Queue.name)"
 
                     Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-                        -Name $Queue.name -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL
+                        -Name $Queue.name -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL -DryRun:$DryRun
                     
                     Write-Host "  -> Queue $($Queue.name): $status [$severity]" -ForegroundColor (if ($severity -eq 'ok') { 'Green' } else { 'Red' })
                 }
@@ -263,7 +118,7 @@ foreach ($target in $config.targets) {
         $errMsg = $_.Exception.Message
         Write-Warning "Failed to connect to RabbitMQ api on $($target.host): $errMsg"
         Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-            -Name $target.name -Metric "Connection" -Severity "error" -Status "Connection failed" -TTL $defaultTTL
+            -Name $target.name -Metric "Connection" -Severity "error" -Status "Connection failed" -TTL $defaultTTL -DryRun:$DryRun
     }
 }
 Write-Host "Done."

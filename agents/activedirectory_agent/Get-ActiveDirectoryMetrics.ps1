@@ -30,62 +30,8 @@ param(
     [switch]$MockRun
 )
 
-#region Helper Functions
-
-function Send-ToApi {
-    param(
-        [string]$ApiUrl,
-        [string]$SystemName,
-        [string]$ProjectName,
-        [string]$Name,
-        [string]$Metric,
-        [string]$Severity,
-        [string]$Status,
-        [int]$TTL,
-        [object]$ExtraFields
-    )
-
-    $idSource = "$SystemName|$ProjectName|$Name|$Metric"
-    $md5 = [System.Security.Cryptography.MD5]::Create()
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($idSource)
-    $hash = $md5.ComputeHash($bytes)
-    $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
-
-    $componentPayload = @{
-        Id       = $componentId
-        Name     = $Name
-        Metric   = $Metric
-        Severity = $Severity
-        Status   = $Status
-        TTL      = $TTL
-    }
-    
-    if ($null -ne $ExtraFields) {
-        foreach ($prop in $ExtraFields.psobject.Properties) {
-            if (-not $componentPayload.ContainsKey($prop.Name)) {
-                $componentPayload[$prop.Name] = $prop.Value
-            }
-        }
-    }
-
-    $body = @{
-        systemName  = $SystemName
-        projectName = $ProjectName
-        payload     = $componentPayload
-    } | ConvertTo-Json -Compress
-
-    try {
-        Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body `
-            -ContentType "application/json" -ErrorAction Stop | Out-Null
-        return $true
-    }
-    catch {
-        Write-Warning "Failed to send to API: $_"
-        return $false
-    }
-}
-
-#endregion
+# Shared functions: Send-ToApi
+Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
 
 #region Main Script
 
