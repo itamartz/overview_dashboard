@@ -68,12 +68,10 @@ function Send-ToApi {
         }
     }
 
-    $componentPayloadJson = $componentPayload | ConvertTo-Json -Compress
-
     $body = @{
         systemName  = $SystemName
         projectName = $ProjectName
-        payload     = $componentPayloadJson
+        payload     = $componentPayload
     } | ConvertTo-Json -Compress
 
     try {
@@ -180,16 +178,27 @@ if ($DryRun) {
 } else {
     try {
         Write-Host "Running dcdiag (this might take a minute)..."
-        $dcdiagOutput = dcdiag 2>&1
+        $dcdiagOutput = dcdiag /test:NetLogons /test:Services /test:Replications /test:Advertising /test:DNS 2>&1
         $failedTests = @()
+        
+        $allowedTests = @('advertising', 'dns', 'netlogons', 'replications', 'services')
         
         $dcdiagOutput | ForEach-Object {
             if ($_ -match "passed test\s+(.+)") {
-                $dcdiagTestResults[$matches[1].Trim()] = "Passed"
+                $testName = $matches[1].Trim().ToLower()
+                if ($allowedTests -contains $testName) {
+                    $dcdiagTestResults[$testName] = "Passed"
+                }
             } elseif ($_ -match "failed test\s+(.+)") {
-                $testName = $matches[1].Trim()
-                $dcdiagTestResults[$testName] = "Failed"
-                $failedTests += $testName
+                $testName = $matches[1].Trim().ToLower()
+                if ($allowedTests -contains $testName) {
+                    if ($testName -eq 'dns' -and (($dcdiagOutput -join ' ') -match 'Broken delegated')) {
+                        $dcdiagTestResults[$testName] = "Passed"
+                    } else {
+                        $dcdiagTestResults[$testName] = "Failed"
+                        $failedTests += $testName
+                    }
+                }
             }
         }
         
@@ -229,14 +238,11 @@ if ($overallSeverity -eq "ok") {
 }
 
 $extraFields = New-Object PSObject -Property @{
-    ServicesStatus = if ($serviceStatuses.Count -gt 0) { ($serviceStatuses -join ", ") } else { "All OK" }
-    DcdiagStatus = $dcdiagStatus
-}
-if ($dcdiagErrorsText) {
-    $extraFields | Add-Member -MemberType NoteProperty -Name "DcdiagErrors" -Value $dcdiagErrorsText
-}
-foreach ($test in $dcdiagTestResults.Keys) {
-    $extraFields | Add-Member -MemberType NoteProperty -Name "DcdiagTest_$test" -Value $dcdiagTestResults[$test]
+    advertising  = if ($dcdiagTestResults['advertising']) { $dcdiagTestResults['advertising'] } else { 'N/A' }
+    dns          = if ($dcdiagTestResults['dns']) { $dcdiagTestResults['dns'] } else { 'N/A' }
+    netlogons    = if ($dcdiagTestResults['netlogons']) { $dcdiagTestResults['netlogons'] } else { 'N/A' }
+    replications = if ($dcdiagTestResults['replications']) { $dcdiagTestResults['replications'] } else { 'N/A' }
+    services     = if ($dcdiagTestResults['services']) { $dcdiagTestResults['services'] } else { 'N/A' }
 }
 
 # 4. Report to API

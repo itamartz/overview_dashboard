@@ -71,12 +71,10 @@ function Send-ToApi {
         $componentPayloadObj[$key] = $ExtraData[$key]
     }
 
-    $componentPayload = $componentPayloadObj | ConvertTo-Json -Compress
-
     $body = @{
         systemName  = $SystemName
         projectName = $ProjectName
-        payload     = $componentPayload
+        payload     = $componentPayloadObj
     } | ConvertTo-Json -Compress
 
     try {
@@ -320,13 +318,14 @@ foreach ($target in $config.targets) {
                 if ($memSummary -ne 'OK') { $severity = 'error' }
 
                 $extraData = @{
+                    CIMC = $serverName
                     StatusHealth = $sysHealth
                     PowerState = $powerState
                     MemorySummary = $memSummary
                     Certificate = $certSeverity
                 }
 
-                Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'CIMC' -Name $serverName -Metric 'SystemHealth' -Severity $severity -Status "Health: $sysHealth" -TTL $defaultTTL -ExtraData $extraData
+                Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'CIMC' -Name $sysInfo.ServerResponse.Name -Metric 'SystemHealth' -Severity $severity -Status "Health: $sysHealth" -TTL $defaultTTL -ExtraData $extraData
             }
         }
 
@@ -341,6 +340,7 @@ foreach ($target in $config.targets) {
                         $severity = if ($pHealth -eq 'OK') { 'ok' } else { 'error' }
 
                         $extraData = @{
+                            CIMC = $serverName
                             OperatingSpeedMHz = $pInfo.ServerResponse.OperatingSpeedMHz
                             TotalCores = $pInfo.ServerResponse.TotalCores
                             TotalEnabledCores = $pInfo.ServerResponse.TotalEnabledCores
@@ -349,7 +349,7 @@ foreach ($target in $config.targets) {
                             Health = $pHealth
                         }
 
-                        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Processor' -Name "$serverName-$($pInfo.ServerResponse.Id)" -Metric 'ProcessorHealth' -Severity $severity -Status "Health: $pHealth" -TTL $defaultTTL -ExtraData $extraData
+                        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Processor' -Name $pInfo.ServerResponse.Name -Metric 'ProcessorHealth' -Severity $severity -Status "Health: $pHealth" -TTL $defaultTTL -ExtraData $extraData
                     }
                 }
             }
@@ -369,11 +369,13 @@ foreach ($target in $config.targets) {
                         $scName = if ($sInfo.ServerResponse.StorageControllers) { $sInfo.ServerResponse.StorageControllers.MemberId } else { $sInfo.ServerResponse.Id }
                         
                         $extraDataSC = @{
+                            CIMC = $serverName
                             State = $sState
                             Health = $sHealth
                         }
                         
-                        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'StorageController' -Name "$serverName-$scName" -Metric 'StorageHealth' -Severity $severity -Status "Health: $sHealth" -TTL $defaultTTL -ExtraData $extraDataSC
+                        $scDisplayName = if ($sInfo.ServerResponse.StorageControllers) { $sInfo.ServerResponse.StorageControllers.Name } else { $sInfo.ServerResponse.Name }
+                        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'StorageController' -Name $scDisplayName -Metric 'StorageHealth' -Severity $severity -Status "Health: $sHealth" -TTL $defaultTTL -ExtraData $extraDataSC
                         
                         # Disks
                         foreach ($drive in $sInfo.ServerResponse.Drives) {
@@ -393,6 +395,7 @@ foreach ($target in $config.targets) {
                                 }
 
                                 $extraDataDisk = @{
+                                    CIMC = $serverName
                                     Manufacturer = $dInfo.ServerResponse.Manufacturer
                                     SerialNumber = $dInfo.ServerResponse.SerialNumber
                                     PredictedMediaLifeLeftPercent = $predLife
@@ -400,7 +403,7 @@ foreach ($target in $config.targets) {
                                     Health = $dHealth
                                 }
 
-                                Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Disks' -Name "$serverName-$($sInfo.ServerResponse.Name)-$($dInfo.ServerResponse.Id)" -Metric 'DiskHealth' -Severity $severity -Status "Health: $dHealth" -TTL $defaultTTL -ExtraData $extraDataDisk
+                                Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Disks' -Name $dInfo.ServerResponse.Name -Metric 'DiskHealth' -Severity $severity -Status "Health: $dHealth" -TTL $defaultTTL -ExtraData $extraDataDisk
                             }
                         }
                     }
@@ -422,24 +425,26 @@ foreach ($target in $config.targets) {
                             $severity = if ($tHealth -eq 'OK') { 'ok' } else { 'error' }
                             
                             $extraDataTemp = @{
+                                CIMC = $serverName
                                 Reading = $temp.ReadingCelsius
                                 State = $temp.Status.State
                                 Health = $tHealth
                             }
                             
-                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Temperature' -Name "$serverName-$($temp.MemberId)" -Metric 'TempHealth' -Severity $severity -Status "$($temp.ReadingCelsius) C" -TTL $defaultTTL -ExtraData $extraDataTemp
+                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Temperature' -Name $temp.Name -Metric 'TempHealth' -Severity $severity -Status "$($temp.ReadingCelsius) C" -TTL $defaultTTL -ExtraData $extraDataTemp
                         }
                         foreach ($fan in $thermal.ServerResponse.Fans | Where-Object { $_.Status.Health }) {
                             $fHealth = $fan.Status.Health
                             $severity = if ($fHealth -eq 'OK') { 'ok' } else { 'error' }
                             
                             $extraDataFan = @{
+                                CIMC = $serverName
                                 Reading = $fan.Reading
                                 State = $fan.Status.State
                                 Health = $fHealth
                             }
 
-                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Fans' -Name "$serverName-$($fan.MemberId)" -Metric 'FanHealth' -Severity $severity -Status "$($fan.Reading) RPM" -TTL $defaultTTL -ExtraData $extraDataFan
+                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Fans' -Name $fan.Name -Metric 'FanHealth' -Severity $severity -Status "$($fan.Reading) RPM" -TTL $defaultTTL -ExtraData $extraDataFan
                         }
                     }
                 }
@@ -452,13 +457,14 @@ foreach ($target in $config.targets) {
                             $severity = if ($pHealth -eq 'OK') { 'ok' } else { 'error' }
                             
                             $extraDataPower = @{
+                                CIMC = $serverName
                                 PowerInputWatts = $psu.PowerInputWatts
                                 PowerOutputWatts = $psu.PowerOutputWatts
                                 State = $psu.Status.State
                                 Health = $pHealth
                             }
 
-                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'PowerSupply' -Name "$serverName-$($psu.MemberId)" -Metric 'PowerHealth' -Severity $severity -Status "$($psu.PowerInputWatts) W" -TTL $defaultTTL -ExtraData $extraDataPower
+                            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'PowerSupply' -Name $psu.Name -Metric 'PowerHealth' -Severity $severity -Status "$($psu.PowerInputWatts) W" -TTL $defaultTTL -ExtraData $extraDataPower
                         }
                     }
                 }

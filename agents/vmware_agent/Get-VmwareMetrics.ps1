@@ -67,7 +67,7 @@ function Send-ToApi {
     $body = @{
         systemName  = $SystemName
         projectName = $ProjectName
-        payload     = ($Payload | ConvertTo-Json -Depth 10 -Compress)
+        payload     = $Payload
     }
 
     $jsonBody = $body | ConvertTo-Json -Depth 10
@@ -119,6 +119,29 @@ function Get-X509Certificate2Web {
         $tcpClinet.Dispose()
         Write-Output $cert
     } catch { }
+}
+
+function Get-TimeAgoString {
+    param ([DateTime]$LastCommunication)
+    $now = Get-Date
+    $timespan = $now - $LastCommunication
+    $parts = @()
+
+    if ($timespan.Days -gt 0) {
+        $s = if ($timespan.Days -ne 1) { "s" } else { "" }
+        $parts += "$($timespan.Days) day$s"
+    }
+    if ($timespan.Hours -gt 0) {
+        $s = if ($timespan.Hours -ne 1) { "s" } else { "" }
+        $parts += "$($timespan.Hours) hour$s"
+    }
+    if ($timespan.Minutes -gt 0) {
+        $s = if ($timespan.Minutes -ne 1) { "s" } else { "" }
+        $parts += "$($timespan.Minutes) minute$s"
+    }
+    
+    if ($parts.Count -eq 0) { return "just now" }
+    return ($parts -join ' ') + " ago"
 }
 
 function Test-CertificateState {
@@ -395,7 +418,7 @@ foreach ($target in $config.targets) {
             $esxiObj.CertificateState = Test-CertificateState -Certificate $esxiCert
             $esxiObj.VMnicStatus = Get-ESXIVMnicStatus -VMHost $esxi
 
-            $esxiSev = 'Info'
+            $esxiSev = 'Ok'
             if ($esxiObj.CertificateState -ne 'Ok') { $esxiSev = Compare-Severity -Current $esxiSev -New $esxiObj.CertificateState }
             if ($esxiObj.ConnectionState -ne 'Connected') { $esxiSev = 'Error' }
             if ($esxiObj.VMnicStatus -ne 'Ok') { $esxiSev = 'Error' }
@@ -418,15 +441,51 @@ foreach ($target in $config.targets) {
                 TTL = $config.defaultTTL
             }
             
+            $AllTags = ($vm | Get-TagAssignment).Tag
+            $AllTagsJoin = ($AllTags | ForEach-Object { "$($_.Name)/$($_.Category)" }) -join ','
+            
             $ann = $vm | Get-Annotation | Where-Object { $_.Name -eq 'Backup Status' }
             $isBackedUp = $false
+            $lastBackupWas = "N/A"
             if ($ann -and -not [string]::IsNullOrEmpty($ann.Value) -and ($ann.Value -match '([0-9/]+\s[0-9:]+)')) {
                 $lastBackupTime = [datetime]::ParseExact($Matches[0], 'dd/MM/yyyy HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture)
                 $isBackedUp = $now.AddDays(-1) -le $lastBackupTime
+                $lastBackupWas = Get-TimeAgoString -LastCommunication $lastBackupTime
             }
             
+            $vmObj.AllTags = $AllTagsJoin
+            $vmObj.ISBackupInLast24Hours = $isBackedUp
+            $vmObj.LastBackupWas = $lastBackupWas
             $vmObj.Severity = if ($isBackedUp) { 'ok' } else { 'error' }
             Send-ToApi -ApiUrl $config.apiUrl -SystemName $config.systemName -ProjectName "VMs" -Payload $vmObj -DryRun:$DryRun
+        }
+
+        # --- Snapshots ---
+        $allSnaps = Get-VM | Get-Snapshot
+        $snapsByVm = $allSnaps | Group-Object -Property VM
+        foreach ($group in $snapsByVm) {
+            $vmName = $group.Name
+            $snapCount = $group.Count
+            $snapNames = ($group.Group | ForEach-Object { $_.Name }) -join ','
+            $totalSizeGB = [math]::Round((($group.Group | Measure-Object -Property SizeGB -Sum).Sum), 2)
+            
+            $snapSev = 'ok'
+            if ($totalSizeGB -gt 1000) {
+                $snapSev = 'error'
+            } elseif ($totalSizeGB -gt 300) {
+                $snapSev = 'warning'
+            }
+            
+            $snapObj = @{
+                Id = "$($target.name)-$vmName-snapshots"
+                Name = $vmName
+                count = $snapCount
+                snapshots = $snapNames
+                totalsizegb = $totalSizeGB
+                Severity = $snapSev
+                TTL = $config.defaultTTL
+            }
+            Send-ToApi -ApiUrl $config.apiUrl -SystemName $config.systemName -ProjectName "Snapshots" -Payload $snapObj -DryRun:$DryRun
         }
 
     }

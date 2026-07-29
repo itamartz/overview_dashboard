@@ -17,7 +17,8 @@ function Send-ToApi {
         [string]$Metric,
         [string]$Severity,
         [string]$Status,
-        [int]$TTL
+        [int]$TTL,
+        [hashtable]$ExtraData = @{}
     )
 
     $idSource = "$SystemName|$ProjectName|$Name|$Metric"
@@ -26,19 +27,23 @@ function Send-ToApi {
     $hash = $md5.ComputeHash($bytes)
     $componentId = [System.BitConverter]::ToString($hash) -replace '-', ''
 
-    $componentPayload = @{
+    $componentPayloadObj = @{
         Id       = $componentId
         Name     = $Name
         Metric   = $Metric
         Severity = $Severity
         Status   = $Status
         TTL      = $TTL
-    } | ConvertTo-Json -Compress
+    }
+    
+    foreach ($key in $ExtraData.Keys) {
+        $componentPayloadObj[$key] = $ExtraData[$key]
+    }
 
     $body = @{
         systemName  = $SystemName
         projectName = $ProjectName
-        payload     = $componentPayload
+        payload     = $componentPayloadObj
     } | ConvertTo-Json -Compress
 
     try {
@@ -272,9 +277,11 @@ foreach ($target in $config.targets) {
         $healthEndpoint = "/api/private/cli/system/health/status?fields=status"
         $healthStatus = Invoke-NetAppRestApi -ClusterIP $target.host -Endpoint $healthEndpoint -Credential $credential
         $status = if ($healthStatus.status -eq 'ok') { "ok" } else { "error" }
-        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - Cluster Health" -Metric "Cluster" -Severity $status -Status "Health: $($healthStatus.status)" -TTL $defaultTTL
+        
+        $extraData = @{ message = "system healthy is $($healthStatus.status)" }
+        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Cluster' -Name "$($target.name) - Cluster Health" -Metric "Cluster" -Severity $status -Status "Health: $($healthStatus.status)" -TTL $defaultTTL -ExtraData $extraData
     } catch {
-        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - Cluster Health" -Metric "Cluster" -Severity "error" -Status $_.Exception.Message -TTL $defaultTTL
+        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Cluster' -Name "$($target.name) - Cluster Health" -Metric "Cluster" -Severity "error" -Status $_.Exception.Message -TTL $defaultTTL
     }
 
     # 2. Nodes Up
@@ -283,10 +290,12 @@ foreach ($target in $config.targets) {
         $nodes = Invoke-NetAppRestApi -ClusterIP $target.host -Endpoint $endpoint -Credential $credential
         $critical = @(); foreach ($node in $nodes.records) { if ($node.state -ne "up") { $critical += $node.name } }
         $status = if ($critical.Count -gt 0) { "error" } else { "ok" }
-        $msg = if ($critical.Count -gt 0) { "Nodes down: $($critical -join ', ')" } else { "All nodes up" }
-        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - Nodes" -Metric "Nodes" -Severity $status -Status $msg -TTL $defaultTTL
+        $msg = if ($critical.Count -gt 0) { "Node issues: $($critical -join '; ')" } else { "All $($nodes.num_records) nodes healthy and online" }
+        
+        $extraData = @{ message = $msg }
+        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Cluster' -Name "$($target.name) - Nodes" -Metric "Nodes" -Severity $status -Status $msg -TTL $defaultTTL -ExtraData $extraData
     } catch {
-        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - Nodes" -Metric "Nodes" -Severity "error" -Status $_.Exception.Message -TTL $defaultTTL
+        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Cluster' -Name "$($target.name) - Nodes" -Metric "Nodes" -Severity "error" -Status $_.Exception.Message -TTL $defaultTTL
     }
 
     # 3. Node HA Status
@@ -305,9 +314,12 @@ foreach ($target in $config.targets) {
             }
         }
         $status = if ($critical.Count -gt 0) { "error" } elseif ($warnings.Count -gt 0) { "warning" } else { "ok" }
-        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - HA Status" -Metric "HA" -Severity $status -Status "HA Status $status" -TTL $defaultTTL
+        $msg = if ($critical.Count -gt 0) { "$($critical -join '; ')" } elseif ($warnings.Count -gt 0) { "$($warnings.Count)" } else { "All $($nodes.num_records) nodes ha ok" }
+        
+        $extraData = @{ message = $msg }
+        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Cluster' -Name "$($target.name) - HA Status" -Metric "HA" -Severity $status -Status "HA Status $status" -TTL $defaultTTL -ExtraData $extraData
     } catch {
-        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - HA Status" -Metric "HA" -Severity "error" -Status $_.Exception.Message -TTL $defaultTTL
+        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Cluster' -Name "$($target.name) - HA Status" -Metric "HA" -Severity "error" -Status $_.Exception.Message -TTL $defaultTTL
     }
 
     # 4. Aggregates
@@ -324,7 +336,17 @@ foreach ($target in $config.targets) {
             } else {
                 $status = "error"
             }
-            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - Aggr: $($aggr.name)" -Metric "Aggregate" -Severity $status -Status "$usedPercent% Used" -TTL $defaultTTL
+            
+            $extraData = @{
+                NetApp = $target.host
+                totalTB = [math]::Round($aggr.space.block_storage.size / 1TB, 2)
+                usedTB = [math]::Round($aggr.space.block_storage.used / 1TB, 2)
+                availableTB = [math]::Round($aggr.space.block_storage.available / 1TB, 2)
+                '% Used' = $usedPercent
+                state = $aggr.state
+            }
+
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Aggregates' -Name "$($aggr.name)" -Metric "Aggregate" -Severity $status -Status "$usedPercent% Used" -TTL $defaultTTL -ExtraData $extraData
         }
     } catch {
         Write-Warning "Failed to process aggregates: $_"
@@ -340,7 +362,15 @@ foreach ($target in $config.targets) {
                 $usedPercent = [math]::Round(($vol.space.used / $vol.space.size) * 100, 1)
             }
             $status = if ($usedPercent -ge $target.VolumeErrorThreshold) { "error" } elseif ($usedPercent -ge $target.VolumeWarningThreshold) { "warning" } else { "ok" }
-            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - Vol: $($vol.name)" -Metric "Volume" -Severity $status -Status "$usedPercent% Used" -TTL $defaultTTL
+            
+            $extraData = @{
+                NetApp = $target.host
+                TotalGB = [math]::Round($vol.space.size / 1GB, 2)
+                UsedGB = [math]::Round($vol.space.used / 1GB, 2)
+                '% Used' = $usedPercent
+            }
+            
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Volumes' -Name "$($vol.name)" -Metric "Volume" -Severity $status -Status "$usedPercent% Used" -TTL $defaultTTL -ExtraData $extraData
         }
     } catch {
         Write-Warning "Failed to process volumes: $_"
@@ -363,7 +393,12 @@ foreach ($target in $config.targets) {
                     $status = "error"
                 }
                 if ($status -ne "ok") {
-                    Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - Snap: $($snap.name)" -Metric "Snapshot" -Severity $status -Status "Aged $($age.Days) days" -TTL $defaultTTL
+                    $extraData = @{
+                        NetApp = $target.host
+                        VolumeName = $vol.name
+                        Snapshot = $snap.name
+                    }
+                    Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Snapshots' -Name "$($snap.name)" -Metric "Snapshot" -Severity $status -Status "Aged $($age.Days) days" -TTL $defaultTTL -ExtraData $extraData
                 }
             }
         }
@@ -385,7 +420,15 @@ foreach ($target in $config.targets) {
             } else {
                 $status = "error"
             }
-            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - LUN: $($lun.location.logical_unit)" -Metric "LUN" -Severity $status -Status "$usedPercent% Used" -TTL $defaultTTL
+            
+            $extraData = @{
+                NetApp = $target.host
+                state = $lun.status.state
+                TotalGB = [math]::Round($lun.space.size / 1GB, 2)
+                UsedGB = [math]::Round($lun.space.used / 1GB, 2)
+                '% Used' = $usedPercent
+            }
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Luns' -Name "$($lun.location.logical_unit)" -Metric "LUN" -Severity $status -Status "$usedPercent% Used" -TTL $defaultTTL -ExtraData $extraData
         }
     } catch {
         Write-Warning "Failed to process LUNs: $_"
@@ -398,7 +441,9 @@ foreach ($target in $config.targets) {
         $problemStates = @("broken", "failed", "missing", "reconstructing", "unfail")
         foreach ($disk in $disks.records) {
             $status = if ($disk.state -in $problemStates) { "error" } else { "ok" }
-            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - Disk: $($disk.name)" -Metric "Disk" -Severity $status -Status "State: $($disk.state)" -TTL $defaultTTL
+            
+            $extraData = @{ NetApp = $target.host }
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Disks' -Name "$($disk.name)" -Metric "Disk" -Severity $status -Status "State: $($disk.state)" -TTL $defaultTTL -ExtraData $extraData
         }
     } catch {
         Write-Warning "Failed to process disks: $_"
@@ -406,11 +451,18 @@ foreach ($target in $config.targets) {
 
     # 9. Ethernet
     try {
-        $endpoint = "/api/network/ethernet/ports?fields=enabled,state,name"
+        $endpoint = "/api/network/ethernet/ports?fields=enabled,state,name,node"
         $ethernet = Invoke-NetAppRestApi -ClusterIP $target.host -Endpoint $endpoint -Credential $credential
         foreach ($eth in $ethernet.records) {
             $status = if ($eth.enabled -and $eth.state -ne "up") { "error" } else { "ok" }
-            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - Eth: $($eth.name)" -Metric "Ethernet" -Severity $status -Status "State: $($eth.state)" -TTL $defaultTTL
+            
+            $extraData = @{
+                NetApp = $target.host
+                Enabled = $eth.enabled
+                State = $eth.state
+                Node = $eth.node.name
+            }
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Ethernet' -Name "$($eth.name)" -Metric "Ethernet" -Severity $status -Status "State: $($eth.state)" -TTL $defaultTTL -ExtraData $extraData
         }
     } catch {
         Write-Warning "Failed to process ethernet ports: $_"
@@ -418,11 +470,18 @@ foreach ($target in $config.targets) {
 
     # 10. LIFs
     try {
-        $endpoint = "/api/network/ip/interfaces?fields=state,enabled,name"
+        $endpoint = "/api/network/ip/interfaces?fields=state,location,svm,ip,enabled,name"
         $lifs = Invoke-NetAppRestApi -ClusterIP $target.host -Endpoint $endpoint -Credential $credential
         foreach ($lif in $lifs.records) {
             $status = if ($lif.enabled -and $lif.state -ne "up") { "error" } else { "ok" }
-            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName -Name "$($target.name) - LIF: $($lif.name)" -Metric "LIF" -Severity $status -Status "State: $($lif.state)" -TTL $defaultTTL
+            
+            $extraData = @{
+                NetApp = $target.host
+                Enabled = $lif.enabled
+                State = $lif.state
+                SVM = $lif.svm.name
+            }
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName 'Interfaces' -Name "$($lif.name)" -Metric "LIF" -Severity $status -Status "State: $($lif.state)" -TTL $defaultTTL -ExtraData $extraData
         }
     } catch {
         Write-Warning "Failed to process LIFs: $_"
