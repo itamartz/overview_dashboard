@@ -1,0 +1,62 @@
+{
+  "apiUrl": "https://overview.526443026.xyz/api/components",
+  "projectName": "Sample Project",
+  "systemName": "Example Monitoring",
+  "defaultTTL": 120,
+  "credentialMethod": "plaintext",
+  "cyberark": {
+    "ccpUrl": "https://cyberark.company.com/AIMWebService/api/Accounts",
+    "appId": "OverviewDashboardAgent",
+    "verifySsl": true,
+    "timeoutSeconds": 10,
+    "cacheMinutes": 5
+  },
+  "targets": [
+    {
+      "name": "Web-Server-01",
+      "host": "192.168.1.10",
+      "port": 80,
+      "username": "admin",
+      "password": "sample_password",
+      "cyberarkSafe": "AppVault",
+      "cyberarkObject": "Web-Server-01-admin",
+      "encryptedPasswordFile": "credentials/web_server_01.enc",
+      "enabled": true,
+      "metrics": [
+        {
+          "name": "CPU Usage",
+          "warning": 80,
+          "error": 95
+        },
+        {
+          "name": "Memory Usage",
+          "warning": 85,
+          "error": 95
+        }
+      ]
+    },
+    {
+      "name": "Database-Server-01",
+      "host": "192.168.1.20",
+      "port": 5432,
+      "username": "dbuser",
+      "password": "sample_password",
+      "cyberarkSafe": "AppVault",
+      "cyberarkObject": "Database-Server-01-dbuser",
+      "encryptedPasswordFile": "credentials/db_server_01.enc",
+      "enabled": true,
+      "metrics": [
+        {
+          "name": "CPU Usage",
+          "warning": 75,
+          "error": 90
+        },
+        {
+          "name": "Disk Space",
+          "warning": 85,
+          "error": 95
+        }
+      ]
+    }
+  ]
+}

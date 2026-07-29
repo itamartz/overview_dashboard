@@ -1,0 +1,5 @@
+Name,Host,Port,Metric,Warning,Error
+Web-Server-01,192.168.1.10,80,CPU Usage,80,95
+Web-Server-01,192.168.1.10,80,Memory Usage,85,95
+Database-Server-01,192.168.1.20,5432,CPU Usage,75,90
+Database-Server-01,192.168.1.20,5432,Disk Space,85,95
