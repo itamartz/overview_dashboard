@@ -1,0 +1,35 @@
+{
+  "apiUrl": "https://overview.tazone.net/api/components",
+  "projectName": "Queues",
+  "systemName": "RabbitMQ",
+  "defaultTTL": 300,
+  "credentialMethod": "cyberark",
+  "cyberark": {
+    "ccpUrl": "https://cyberark.yourcompany.com/AIMWebService/api/Accounts",
+    "appId": "OverviewDashboardAgent",
+    "verifySsl": true,
+    "timeoutSeconds": 10,
+    "cacheMinutes": 5
+  },
+  "targets": [
+    {
+      "name": "rabbitmq01",
+      "host": "rabbitmq01",
+      "prefix": "http",
+      "port": 15672,
+      "username": "rabbitadmin",
+      "cyberarkSafe": "RabbitMQ",
+      "cyberarkObject": "rabbitmq01-rabbitadmin",
+      "password": "Password",
+      "enabled": true,
+      "queues": {
+        "action_types_management": {
+          "consumers": 2
+        },
+        "statuses_relays": {
+          "consumers": 3
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "apiUrl": "https://overview.tazone.net/api/components",
+  "projectName": "Active Directory",
+  "systemName": "Infrastructure Monitoring",
+  "defaultTTL": 3600,
+  "credentialMethod": "plaintext",
+  "services": [
+    "NTDS",
+    "Netlogon",
+    "DNS",
+    "Kdc",
+    "W32Time",
+    "SamSs",
+    "RpcSs"
+  ]
+}

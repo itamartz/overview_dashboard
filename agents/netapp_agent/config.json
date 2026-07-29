@@ -1,0 +1,32 @@
+{
+  "apiUrl": "https://overview.tazone.net/api/components",
+  "projectName": "NetApp Storage",
+  "systemName": "Storage",
+  "defaultTTL": 3600,
+  "credentialMethod": "plaintext",
+  "cyberark": {
+    "ccpUrl": "https://cyberark.yourcompany.com/AIMWebService/api/Accounts",
+    "appId": "OverviewDashboardAgent",
+    "verifySsl": true,
+    "timeoutSeconds": 10
+  },
+  "targets": [
+    {
+      "name": "netapp01",
+      "host": "192.168.1.100",
+      "username": "admin",
+      "password": "plaintext_password_here",
+      "cyberarkSafe": "NetAppSafe",
+      "cyberarkObject": "netapp01-admin",
+      "encryptedPasswordFile": "credentials\\netapp01.enc",
+      "enabled": true,
+      "VolumeWarningThreshold": 80,
+      "VolumeErrorThreshold": 90,
+      "LunWarningThreshold": 80,
+      "LunErrorThreshold": 90,
+      "AggregateWarningThreshold": 80,
+      "AggregateErrorThreshold": 90,
+      "SnapshotsThreshold": 180
+    }
+  ]
+}

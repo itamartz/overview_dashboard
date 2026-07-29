@@ -1,0 +1,24 @@
+{
+  "apiUrl": "https://overview.tazone.net/api/components",
+  "projectName": "CIMC",
+  "systemName": "Cisco CIMC",
+  "defaultTTL": 3600,
+  "credentialMethod": "cyberark",
+  "cyberark": {
+    "ccpUrl": "https://pamweb/AIMWebService/api/Accounts",
+    "appId": "OverviewDashboardAgent",
+    "verifySsl": false,
+    "timeoutSeconds": 10,
+    "cacheMinutes": 5
+  },
+  "targets": [
+    {
+      "name": "SERVER01",
+      "host": "SERVER01",
+      "username": "admin",
+      "cyberarkSafe": "RedfishSafe",
+      "cyberarkObject": "SERVER01-admin",
+      "enabled": true
+    }
+  ]
+}
