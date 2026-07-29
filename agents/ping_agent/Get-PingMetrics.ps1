@@ -33,7 +33,7 @@
 
 param(
     [string]$CsvPath = "$PSScriptRoot\components.csv",
-    [string]$ApiUrl = "https://overview.526443026.xyz/api/components",
+    [string]$ApiUrl = "https://overview.tazone.net/api/components",
     [string]$ProjectName = "Ping Checks",
     [string]$SystemName = "Network Monitoring",
     [int]$DefaultTTL = 60,

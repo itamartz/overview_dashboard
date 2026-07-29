@@ -295,7 +295,7 @@ Document: requirements, quick start, configuration, metrics collected, severity 
 
 ```json
 {
-  "apiUrl": "https://overview.526443026.xyz/api/components",
+  "apiUrl": "https://overview.tazone.net/api/components",
   "projectName": "Descriptive Project Name",
   "systemName": "System Category Name",
   "defaultTTL": 120
@@ -399,7 +399,7 @@ The `credentialMethod` field in `config.json` tells the agent which strategy to 
 
 ```json
 {
-  "apiUrl": "https://overview.526443026.xyz/api/components",
+  "apiUrl": "https://overview.tazone.net/api/components",
   "projectName": "Network Devices",
   "systemName": "SSH Monitoring",
   "defaultTTL": 120,
@@ -1868,7 +1868,7 @@ def build_payload(metrics: dict, severity: str, project_name: str, system_name: 
 
 def main():
     parser = argparse.ArgumentParser(description='[Technology] monitoring agent')
-    parser.add_argument('--api-url', default='https://overview.526443026.xyz/api/components')
+    parser.add_argument('--api-url', default='https://overview.tazone.net/api/components')
     parser.add_argument('--project-name', default='YourProject')
     parser.add_argument('--system-name', default='YourSystem')
     parser.add_argument('--threshold-warning', type=int, default=85)
@@ -1928,7 +1928,7 @@ if __name__ == '__main__':
 # Get-HttpMetrics.ps1
 param(
     [string]$CsvPath = "$PSScriptRoot\urls.csv",
-    [string]$ApiUrl = "https://overview.526443026.xyz/api/components",
+    [string]$ApiUrl = "https://overview.tazone.net/api/components",
     [string]$ProjectName = "HTTP Checks",
     [string]$SystemName = "Web Monitoring",
     [int]$TimeoutSec = 10
@@ -1982,7 +1982,7 @@ foreach ($url in $urls) {
 
 **cURL** (works from any OS):
 ```bash
-curl -X POST https://overview.526443026.xyz/api/components \
+curl -X POST https://overview.tazone.net/api/components \
   -H "Content-Type: application/json" \
   -d '{
     "systemName": "My System",
@@ -1995,7 +1995,7 @@ curl -X POST https://overview.526443026.xyz/api/components \
 
 ```python
 import requests, json, socket
-requests.post("https://overview.526443026.xyz/api/components", json={
+requests.post("https://overview.tazone.net/api/components", json={
     "systemName": "Heartbeat",
     "projectName": "Services",
     "payload": json.dumps({

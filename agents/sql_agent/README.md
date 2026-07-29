@@ -45,7 +45,7 @@ This agent supports three credential strategies:
 
 ```json
 {
-  "apiUrl": "https://overview.526443026.xyz/api/components",
+  "apiUrl": "https://overview.tazone.net/api/components",
   "projectName": "SQL Databases",
   "systemName": "SQL Monitoring",
   "defaultTTL": 300,

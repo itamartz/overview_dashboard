@@ -37,7 +37,7 @@ agents/example_agent/
 
 ```json
 {
-  "apiUrl": "https://overview.526443026.xyz/api/components",
+  "apiUrl": "https://overview.tazone.net/api/components",
   "projectName": "Sample Project",
   "systemName": "Example Monitoring",
   "defaultTTL": 120,
