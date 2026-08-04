@@ -26,6 +26,7 @@ Certificate retrieval uses `Get-X509Certificate2Web` from the shared module (`ag
 
   "warningDays": 30,
   "errorDays": 7,
+  "selfSignedSeverity": "ok",
 
   "targets": [
     {
@@ -48,6 +49,7 @@ Certificate retrieval uses `Get-X509Certificate2Web` from the shared module (`ag
 
 - `warningDays`: A certificate becomes a **warning** once its remaining validity is at or below this many days (default 30).
 - `errorDays`: A certificate becomes an **error** once its remaining validity is at or below this many days (default 7).
+- `selfSignedSeverity`: How a self-signed certificate is reported — `"ok"` (informational only, the default), `"warning"`, or `"error"`. This only ever **raises** severity, never lowers it, so an expired self-signed certificate still reports `error` regardless of this setting.
 - `targets[].name`: Display name for the component on the dashboard.
 - `targets[].host` / `targets[].port`: The endpoint whose presented certificate is inspected. `port` defaults to 443 — set it explicitly for other TLS services (e.g. 636 for LDAPS, 993 for IMAPS, 5671 for AMQPS).
 - `targets[].enabled`: Set to `false` to skip a target without removing it.
@@ -81,4 +83,12 @@ Each component also carries extra data: `Host`, `Port`, `Subject`, `Issuer`, `No
 
 ### Self-signed detection
 
-The agent flags a certificate as **self-signed** when its `Subject` equals its `Issuer` (a self-signed certificate is its own issuer). This is reported as the `SelfSigned` boolean in the component's extra data, and a `(self-signed)` note is appended to the status text. Self-signed detection is informational — it does **not** change the expiry-based severity, so a valid self-signed certificate still reports `ok` while its status makes the self-signed nature visible.
+The agent flags a certificate as **self-signed** when its `Subject` equals its `Issuer` (a self-signed certificate is its own issuer). This is reported as the `SelfSigned` boolean in the component's extra data, and a `(self-signed)` note is appended to the status text.
+
+How much a self-signed certificate affects severity is controlled entirely from `config.json` via `selfSignedSeverity` — no code changes required:
+
+- `"ok"` (default) — informational only; a valid self-signed certificate still reports `ok`.
+- `"warning"` — a self-signed certificate is reported as at least a warning.
+- `"error"` — a self-signed certificate is reported as an error.
+
+The setting only ever **raises** severity, so expiry-based `warning`/`error` results are never downgraded by it.

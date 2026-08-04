@@ -203,6 +203,11 @@ $defaultTTL  = if ($config.defaultTTL) { $config.defaultTTL } else { 3600 }
 $warningDays = if ($config.warningDays) { [int]$config.warningDays } else { 30 }
 $errorDays   = if ($config.errorDays)   { [int]$config.errorDays }   else { 7 }
 
+# How a self-signed certificate should be reported: ok (informational only),
+# warning or error. Only ever raises severity, never lowers it.
+$selfSignedSeverity = if ($config.selfSignedSeverity) { [string]$config.selfSignedSeverity } else { 'ok' }
+if ($selfSignedSeverity -notin @('ok', 'warning', 'error')) { $selfSignedSeverity = 'ok' }
+
 $targets = @($config.targets)
 
 Write-Host "========================================" -ForegroundColor Cyan
@@ -214,6 +219,7 @@ Write-Host "System    : $systemName"
 Write-Host "Targets   : $($targets.Count)"
 Write-Host "TTL       : $defaultTTL s"
 Write-Host "Thresholds: warning <= ${warningDays}d, error <= ${errorDays}d"
+Write-Host "Self-signed: reported as '$selfSignedSeverity'"
 Write-Host ""
 
 if ($DryRun)  { Write-Host "[DRY RUN MODE - No connections or API calls]" -ForegroundColor Yellow }
@@ -309,9 +315,19 @@ foreach ($check in $checks) {
     $eval = Get-CertificateSeverity -DaysRemaining $check.DaysRemaining `
                 -NotYetValid $check.NotYetValid -WarningDays $warningDays -ErrorDays $errorDays
 
-    # Note a self-signed certificate in the status without overriding expiry severity.
-    $status = $eval.Status
-    if ($check.SelfSigned) { $status = "$status (self-signed)" }
+    $severity = $eval.Severity
+    $status   = $eval.Status
+
+    # Note a self-signed certificate, and escalate severity per config
+    # (selfSignedSeverity). Escalation only raises severity, never lowers it.
+    if ($check.SelfSigned) {
+        $status = "$status (self-signed)"
+
+        $rank = @{ ok = 0; warning = 1; error = 2 }
+        if ($rank[$selfSignedSeverity] -gt $rank[$severity]) {
+            $severity = $selfSignedSeverity
+        }
+    }
 
     $extra = @{
         Host          = $check.Host
@@ -325,11 +341,11 @@ foreach ($check in $checks) {
     }
 
     Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-        -Name $check.Name -Metric 'TLS Certificate' -Severity $eval.Severity `
+        -Name $check.Name -Metric 'TLS Certificate' -Severity $severity `
         -Status $status -TTL $defaultTTL -ExtraData $extra
 
-    Write-AgentLine -Message ("  {0,-28} {1,-8} {2}" -f $check.Name, $eval.Severity.ToUpper(), $status) `
-        -Severity $eval.Severity
+    Write-AgentLine -Message ("  {0,-28} {1,-8} {2}" -f $check.Name, $severity.ToUpper(), $status) `
+        -Severity $severity
 
     $reported++
 }

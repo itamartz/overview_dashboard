@@ -7,6 +7,8 @@
   "warningDays": 30,
   "errorDays": 7,
 
+  "selfSignedSeverity": "ok",
+
   "targets": [
     {
       "name": "Public Website",
