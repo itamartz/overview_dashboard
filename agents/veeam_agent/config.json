@@ -1,0 +1,38 @@
+{
+  "apiUrl": "https://overview.tazone.net/api/components",
+  "projectName": "Veeam Backup Jobs",
+  "systemName": "Backup Monitoring",
+  "defaultTTL": 1200,
+
+  "staleWarningHours": 26,
+  "staleErrorHours": 48,
+  "includeDisabledJobs": false,
+  "jobNameFilter": [],
+
+  "credentialMethod": "plaintext",
+
+  "cyberark": {
+    "ccpUrl": "https://cyberark.yourcompany.com/AIMWebService/api/Accounts",
+    "appId": "OverviewDashboardAgent",
+    "verifySsl": true,
+    "timeoutSeconds": 10,
+    "cacheMinutes": 5
+  },
+
+  "veeam": {
+    "name": "Veeam Backup Server",
+    "server": "localhost",
+    "port": 9392,
+    "useCurrentCredentials": true,
+
+    "username": "CONTOSO\\svc-veeam-ro",
+    "password": "plaintext_password_here",
+
+    "cyberarkSafe": "BackupInfrastructure",
+    "cyberarkObject": "OS-VBR01-svc-veeam-ro",
+
+    "encryptedPasswordFile": "credentials\\vbr01.enc",
+
+    "enabled": true
+  }
+}
