@@ -1,0 +1,32 @@
+{
+  "apiUrl": "https://overview.tazone.net/api/components",
+  "projectName": "Certificates",
+  "systemName": "Certificate Monitoring",
+  "defaultTTL": 3600,
+
+  "warningDays": 90,
+  "errorDays": 29,
+
+  "selfSignedSeverity": "ok",
+
+  "targets": [
+    {
+      "name": "Public Website",
+      "host": "www.example.com",
+      "port": 443,
+      "enabled": true
+    },
+    {
+      "name": "Internal Portal",
+      "host": "portal.internal.contoso.com",
+      "port": 443,
+      "enabled": true
+    },
+    {
+      "name": "LDAPS Directory",
+      "host": "dc01.contoso.com",
+      "port": 636,
+      "enabled": false
+    }
+  ]
+}
