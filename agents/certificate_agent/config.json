@@ -4,8 +4,8 @@
   "systemName": "Certificate Monitoring",
   "defaultTTL": 3600,
 
-  "warningDays": 30,
-  "errorDays": 25,
+  "warningDays": 90,
+  "errorDays": 29,
 
   "selfSignedSeverity": "ok",
 

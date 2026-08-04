@@ -24,8 +24,8 @@ Certificate retrieval uses `Get-X509Certificate2Web` from the shared module (`ag
   "systemName": "Certificate Monitoring",
   "defaultTTL": 3600,
 
-  "warningDays": 30,
-  "errorDays": 7,
+  "warningDays": 90,
+  "errorDays": 29,
   "selfSignedSeverity": "ok",
 
   "targets": [
