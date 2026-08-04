@@ -5,7 +5,7 @@
   "defaultTTL": 3600,
 
   "warningDays": 30,
-  "errorDays": 7,
+  "errorDays": 25,
 
   "selfSignedSeverity": "ok",
 
