@@ -77,4 +77,8 @@ Under the `Certificate Monitoring` system / `Certificates` project (both configu
 - `warning` — certificate not yet valid (`NotBefore` in the future), or expiry within `warningDays`.
 - `ok` — certificate valid with more than `warningDays` remaining.
 
-Each component also carries extra data: `Host`, `Port`, `Subject`, `Issuer`, `NotBefore`, `NotAfter`, and `DaysRemaining`.
+Each component also carries extra data: `Host`, `Port`, `Subject`, `Issuer`, `NotBefore`, `NotAfter`, `DaysRemaining`, and `SelfSigned`.
+
+### Self-signed detection
+
+The agent flags a certificate as **self-signed** when its `Subject` equals its `Issuer` (a self-signed certificate is its own issuer). This is reported as the `SelfSigned` boolean in the component's extra data, and a `(self-signed)` note is appended to the status text. Self-signed detection is informational — it does **not** change the expiry-based severity, so a valid self-signed certificate still reports `ok` while its status makes the self-signed nature visible.

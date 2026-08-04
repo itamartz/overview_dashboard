@@ -168,12 +168,13 @@ function Get-CertificateMockData {
     $now = Get-Date
 
     return @(
-        [pscustomobject]@{ Name='www.example.com';  Host='www.example.com';  Port=443; Reachable=$true;  NotBefore=$now.AddDays(-30);  NotAfter=$now.AddDays(180); DaysRemaining=180; NotYetValid=$false; Subject='CN=www.example.com'; Issuer='CN=Example CA' }
-        [pscustomobject]@{ Name='portal.internal';  Host='portal.internal';  Port=443; Reachable=$true;  NotBefore=$now.AddDays(-300); NotAfter=$now.AddDays(20);  DaysRemaining=20;  NotYetValid=$false; Subject='CN=portal.internal'; Issuer='CN=Internal CA' }
-        [pscustomobject]@{ Name='vpn.contoso.com';  Host='vpn.contoso.com';  Port=443; Reachable=$true;  NotBefore=$now.AddDays(-360); NotAfter=$now.AddDays(5);   DaysRemaining=5;   NotYetValid=$false; Subject='CN=vpn.contoso.com'; Issuer='CN=Contoso CA' }
-        [pscustomobject]@{ Name='legacy.contoso';   Host='legacy.contoso';   Port=443; Reachable=$true;  NotBefore=$now.AddDays(-400); NotAfter=$now.AddDays(-3);  DaysRemaining=-3;  NotYetValid=$false; Subject='CN=legacy.contoso'; Issuer='CN=Contoso CA' }
-        [pscustomobject]@{ Name='staging.new';      Host='staging.new';      Port=443; Reachable=$true;  NotBefore=$now.AddDays(2);    NotAfter=$now.AddDays(367); DaysRemaining=367; NotYetValid=$true;  Subject='CN=staging.new'; Issuer='CN=Internal CA' }
-        [pscustomobject]@{ Name='dead.host';        Host='dead.host';        Port=443; Reachable=$false; NotBefore=$null;              NotAfter=$null;             DaysRemaining=0;   NotYetValid=$false; Subject=$null; Issuer=$null }
+        [pscustomobject]@{ Name='www.example.com';  Host='www.example.com';  Port=443; Reachable=$true;  NotBefore=$now.AddDays(-30);  NotAfter=$now.AddDays(180); DaysRemaining=180; NotYetValid=$false; Subject='CN=www.example.com'; Issuer='CN=Example CA'; SelfSigned=$false }
+        [pscustomobject]@{ Name='portal.internal';  Host='portal.internal';  Port=443; Reachable=$true;  NotBefore=$now.AddDays(-300); NotAfter=$now.AddDays(20);  DaysRemaining=20;  NotYetValid=$false; Subject='CN=portal.internal'; Issuer='CN=Internal CA'; SelfSigned=$false }
+        [pscustomobject]@{ Name='vpn.contoso.com';  Host='vpn.contoso.com';  Port=443; Reachable=$true;  NotBefore=$now.AddDays(-360); NotAfter=$now.AddDays(5);   DaysRemaining=5;   NotYetValid=$false; Subject='CN=vpn.contoso.com'; Issuer='CN=Contoso CA'; SelfSigned=$false }
+        [pscustomobject]@{ Name='legacy.contoso';   Host='legacy.contoso';   Port=443; Reachable=$true;  NotBefore=$now.AddDays(-400); NotAfter=$now.AddDays(-3);  DaysRemaining=-3;  NotYetValid=$false; Subject='CN=legacy.contoso'; Issuer='CN=Contoso CA'; SelfSigned=$false }
+        [pscustomobject]@{ Name='staging.new';      Host='staging.new';      Port=443; Reachable=$true;  NotBefore=$now.AddDays(2);    NotAfter=$now.AddDays(367); DaysRemaining=367; NotYetValid=$true;  Subject='CN=staging.new'; Issuer='CN=Internal CA'; SelfSigned=$false }
+        [pscustomobject]@{ Name='appliance.local';  Host='appliance.local';  Port=443; Reachable=$true;  NotBefore=$now.AddDays(-10);  NotAfter=$now.AddDays(90);  DaysRemaining=90;  NotYetValid=$false; Subject='CN=appliance.local'; Issuer='CN=appliance.local'; SelfSigned=$true }
+        [pscustomobject]@{ Name='dead.host';        Host='dead.host';        Port=443; Reachable=$false; NotBefore=$null;              NotAfter=$null;             DaysRemaining=0;   NotYetValid=$false; Subject=$null; Issuer=$null; SelfSigned=$false }
     )
 }
 
@@ -270,6 +271,9 @@ else {
         $daysRemaining = [int][math]::Floor(($notAfter - $now).TotalDays)
         $notYetValid   = $notBefore -gt $now
 
+        # A self-signed certificate is its own issuer: Subject and Issuer match.
+        $selfSigned    = ($cert.Subject -eq $cert.Issuer)
+
         $checks += [pscustomobject]@{
             Name          = $name
             Host          = $targetHost
@@ -281,6 +285,7 @@ else {
             NotYetValid   = $notYetValid
             Subject       = $cert.Subject
             Issuer        = $cert.Issuer
+            SelfSigned    = $selfSigned
         }
     }
 }
@@ -304,6 +309,10 @@ foreach ($check in $checks) {
     $eval = Get-CertificateSeverity -DaysRemaining $check.DaysRemaining `
                 -NotYetValid $check.NotYetValid -WarningDays $warningDays -ErrorDays $errorDays
 
+    # Note a self-signed certificate in the status without overriding expiry severity.
+    $status = $eval.Status
+    if ($check.SelfSigned) { $status = "$status (self-signed)" }
+
     $extra = @{
         Host          = $check.Host
         Port          = $check.Port
@@ -312,13 +321,14 @@ foreach ($check in $checks) {
         NotBefore     = if ($check.NotBefore) { $check.NotBefore.ToString('yyyy-MM-dd') } else { 'Unknown' }
         NotAfter      = if ($check.NotAfter)  { $check.NotAfter.ToString('yyyy-MM-dd') }  else { 'Unknown' }
         DaysRemaining = $check.DaysRemaining
+        SelfSigned    = $check.SelfSigned
     }
 
     Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
         -Name $check.Name -Metric 'TLS Certificate' -Severity $eval.Severity `
-        -Status $eval.Status -TTL $defaultTTL -ExtraData $extra
+        -Status $status -TTL $defaultTTL -ExtraData $extra
 
-    Write-AgentLine -Message ("  {0,-28} {1,-8} {2}" -f $check.Name, $eval.Severity.ToUpper(), $eval.Status) `
+    Write-AgentLine -Message ("  {0,-28} {1,-8} {2}" -f $check.Name, $eval.Severity.ToUpper(), $status) `
         -Severity $eval.Severity
 
     $reported++
