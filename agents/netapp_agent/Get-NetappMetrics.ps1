@@ -1,9 +1,14 @@
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = "config.json",
+    [string]$ConfigPath,
     [switch]$DryRun,
     [switch]$MockRun
 )
+
+if (-not $ConfigPath) {
+    $ConfigPath = "config.json"
+}
+
 
 # Shared functions: Send-ToApi, Get-CyberArkCredential, Get-EncryptedCredential, Resolve-Credential
 Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force

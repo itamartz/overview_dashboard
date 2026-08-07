@@ -1,8 +1,13 @@
 param(
-    [string]$ConfigPath = "$PSScriptRoot\config.json",
+    [string]$ConfigPath,
     [switch]$DryRun,
     [switch]$MockRun
 )
+
+if (-not $ConfigPath) {
+    $ConfigPath = Join-Path $PSScriptRoot "config.json"
+}
+
 
 # 1. LOAD CONFIGURATION
 if (-not (Test-Path $ConfigPath)) {
@@ -107,13 +112,12 @@ foreach ($target in $config.targets) {
                     $metricName = "$($target.name)-$($Queue.name)"
 
                     Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-                        -Name $Queue.name -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL -DryRun:$DryRun
-                    
-                    Write-Host "  -> Queue $($Queue.name): $status [$severity]" -ForegroundColor (if ($severity -eq 'ok') { 'Green' } else { 'Red' })
+                        -Name $Queue.name -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL -DryRun:$DryRun | Out-Null
                 }
             }
         }
     }
+
     catch {
         $errMsg = $_.Exception.Message
         Write-Warning "Failed to connect to RabbitMQ api on $($target.host): $errMsg"

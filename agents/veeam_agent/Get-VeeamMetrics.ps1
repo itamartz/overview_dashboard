@@ -48,10 +48,15 @@
 
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = "$PSScriptRoot\config.json",
+    [string]$ConfigPath,
     [switch]$DryRun,
     [switch]$MockRun
 )
+
+if (-not $ConfigPath) {
+    $ConfigPath = Join-Path $PSScriptRoot "config.json"
+}
+
 
 # Shared functions: Send-ToApi, Get-CyberArkCredential, Get-EncryptedCredential,
 # Resolve-Credential, Get-X509Certificate2Web, Install-ModuleIfNeeded
@@ -288,15 +293,14 @@ function Get-VeeamJobSeverity {
         return @{ Severity = 'warning'; Status = "Unknown result '$Result' ($ageText)" }
     }
 
-    if ($HoursSinceLastRun -ge $StaleErrorHours) {
-        return @{ Severity = 'error';   Status = "Success but stale - last run $ageText" }
-    }
+    # Successful run - report as ok (staleness info included in status message)
     if ($HoursSinceLastRun -ge $StaleWarningHours) {
-        return @{ Severity = 'warning'; Status = "Success but ageing - last run $ageText" }
+        return @{ Severity = 'ok'; Status = "Success - last run $ageText" }
     }
 
     return @{ Severity = 'ok'; Status = "Success ($ageText)" }
 }
+
 
 function Get-VeeamJobStatus {
     <#
@@ -569,13 +573,11 @@ foreach ($job in $jobStatuses) {
 
     Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
         -Name $job.JobName -Metric 'Backup Job' -Severity $eval.Severity `
-        -Status $eval.Status -TTL $defaultTTL -ExtraData $extra
-
-    Write-AgentLine -Message ("  {0,-32} {1,-8} {2}" -f $job.JobName, $eval.Severity.ToUpper(), $eval.Status) `
-        -Severity $eval.Severity
+        -Status $eval.Status -TTL $defaultTTL -ExtraData $extra | Out-Null
 
     $reported++
 }
+
 
 if ($connected) {
     Disconnect-VBRServer -ErrorAction SilentlyContinue

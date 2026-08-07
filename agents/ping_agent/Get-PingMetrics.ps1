@@ -124,12 +124,7 @@ foreach ($item in $hosts) {
         $status = "Ping Failed"
     }
 
-    $success = Send-ToApi -ApiUrl $ApiUrl -SystemName $SystemName -ProjectName $ProjectName `
-        -Name "Ping $hostName" -Metric "Ping" -Severity $severity -Status $status -TTL $DefaultTTL
-
-    if ($success) {
-        Write-Host "-> Reported" -ForegroundColor Green
-    } else {
-        Write-Host "-> Failed to report" -ForegroundColor Red
-    }
+    Send-ToApi -ApiUrl $ApiUrl -SystemName $SystemName -ProjectName $ProjectName `
+        -Name "Ping $hostName" -Metric "Ping" -Severity $severity -Status $status -TTL $DefaultTTL | Out-Null
 }
+

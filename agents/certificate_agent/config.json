@@ -8,6 +8,7 @@
   "errorDays": 29,
 
   "selfSignedSeverity": "ok",
+  "certsDir": "certs",
 
   "targets": [
     {
@@ -30,3 +31,4 @@
     }
   ]
 }
+

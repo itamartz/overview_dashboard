@@ -17,10 +17,15 @@
     Generates fake metrics and sends them to the API.
 #>
 param(
-    [string]$ConfigPath = "$PSScriptRoot\config.json",
+    [string]$ConfigPath,
     [switch]$DryRun,
     [switch]$MockRun
 )
+
+if (-not $ConfigPath) {
+    $ConfigPath = Join-Path $PSScriptRoot "config.json"
+}
+
 
 # Shared functions: Send-ToApi
 Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force

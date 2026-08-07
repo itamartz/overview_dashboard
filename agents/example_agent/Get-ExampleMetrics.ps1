@@ -156,24 +156,12 @@ foreach ($target in $config.targets) {
         $severity = Calculate-Severity -Value $metricValue -WarningThreshold $metric.warning -ErrorThreshold $metric.error
         $status = "$($metricValue)%"
 
-        $color = switch ($severity) {
-            'ok'      { 'Green' }
-            'warning' { 'Yellow' }
-            'error'   { 'Red' }
-            default   { 'White' }
-        }
-
-        Write-Host "  Metric: $($metric.name) = $status [$severity]" -ForegroundColor $color
-
-        $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
             -Name $target.name -Metric $metric.name -Severity $severity `
-            -Status $status -TTL $defaultTTL
-
-        if ($sent) {
-            Write-Host "    -> Successfully reported to API" -ForegroundColor Gray
-        }
+            -Status $status -TTL $defaultTTL | Out-Null
     }
 }
+
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan

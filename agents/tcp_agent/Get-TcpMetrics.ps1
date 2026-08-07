@@ -157,12 +157,7 @@ foreach ($group in $groupedData) {
     }
     $statusMessage = $messages -join ", "
 
-    $success = Send-ToApi -ApiUrl $ApiUrl -SystemName $SystemName -ProjectName $ProjectName `
-        -Name $displayName -Metric "TCP Port" -Severity $severity -Status $statusMessage -TTL $DefaultTTL
-
-    if ($success) {
-        Write-Host "  -> Reported (Severity: $severity)" -ForegroundColor Green
-    } else {
-        Write-Host "  -> Failed to report" -ForegroundColor Red
-    }
+    Send-ToApi -ApiUrl $ApiUrl -SystemName $SystemName -ProjectName $ProjectName `
+        -Name $displayName -Metric "TCP Port" -Severity $severity -Status $statusMessage -TTL $DefaultTTL | Out-Null
 }
+

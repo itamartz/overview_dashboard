@@ -25,10 +25,15 @@
 
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = "$PSScriptRoot\config.json",
+    [string]$ConfigPath,
     [switch]$DryRun,
     [switch]$MockRun
 )
+
+if (-not $ConfigPath) {
+    $ConfigPath = Join-Path $PSScriptRoot "config.json"
+}
+
 
 # Shared functions: Send-ToApi
 Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
@@ -193,14 +198,11 @@ $extraFields = New-Object PSObject -Property @{
 
 # 4. Report to API
 if (-not $DryRun) {
-    $success = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+    Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
         -Name $hostname -Metric "AD Health" -Severity $overallSeverity `
-        -Status $statusMessage -TTL $defaultTTL -ExtraFields $extraFields
-        
-    if ($success) {
-        Write-Host "Reported to Dashboard API successfully." -ForegroundColor Green
-    }
+        -Status $statusMessage -TTL $defaultTTL -ExtraFields $extraFields | Out-Null
 }
+
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan

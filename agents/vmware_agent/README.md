@@ -82,5 +82,6 @@ The agent pushes data to the Dashboard categorized into the following `projectNa
 
 1. **vCenter**: Core appliance health, backup jobs, archive partition, certificates, and license usage.
 2. **Datacenter**: Datacenter alarms.
-3. **ESXI**: Host connectivity, VMnic statuses, and host certificate expiration.
+3. **ESXI**: Host connectivity, VMnic statuses, host certificate expiration, and CPU & Memory usage percentage thresholds.
 4. **VMs**: Individual VM backup status verification via VM tags/annotations.
+

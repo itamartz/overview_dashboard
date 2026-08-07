@@ -135,21 +135,31 @@ function Send-ToApi {
         payload     = ($componentPayload | ConvertTo-Json -Compress -Depth 10)
     } | ConvertTo-Json -Compress
 
+    $color = switch ($Severity) {
+        'ok'      { 'Green' }
+        'warning' { 'Yellow' }
+        'error'   { 'Red' }
+        default   { 'Gray' }
+    }
+
     if ($DryRun) {
-        Write-Host "[DRY RUN] Would send to API: $ApiUrl" -ForegroundColor Yellow
+        Write-Host ("[DRY RUN] {0,-28} {1,-8} {2}" -f $Name, $Severity.ToUpper(), $Status) -ForegroundColor $color
         Write-Host $body -ForegroundColor Gray
         return $true
     }
 
     try {
         Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body -ContentType "application/json" -ErrorAction Stop | Out-Null
+        Write-Host ("  {0,-28} {1,-8} {2}" -f $Name, $Severity.ToUpper(), $Status) -ForegroundColor $color
         return $true
     }
     catch {
         Write-Warning "Failed to send to API: $_"
+        Write-Host ("  {0,-28} {1,-8} {2} (POST FAILED)" -f $Name, $Severity.ToUpper(), $Status) -ForegroundColor Red
         return $false
     }
 }
+
 
 function Get-CyberArkCredential {
     <#

@@ -38,10 +38,15 @@
 
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = "$PSScriptRoot\config.json",
+    [string]$ConfigPath,
     [switch]$DryRun,
     [switch]$MockRun
 )
+
+if (-not $ConfigPath) {
+    $ConfigPath = Join-Path $PSScriptRoot "config.json"
+}
+
 
 # Import parsers
 . "$PSScriptRoot\parsers.ps1"
@@ -448,11 +453,8 @@ foreach ($target in $targets) {
             Write-Host "  Metric: $metricName -> $severity ($status)" -ForegroundColor $color
             
             # Send mock data to API
-            $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-                -Name $targetName -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL
-            if ($sent) {
-                Write-Host "    -> Reported to Dashboard" -ForegroundColor Gray
-            }
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+                -Name $targetName -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL | Out-Null
             continue
         }
         
@@ -467,7 +469,6 @@ foreach ($target in $targets) {
         if (-not $result.Success) {
             $severity = "error"
             $status = "Command failed: $($result.Output)"
-            Write-Host "  Metric: $metricName -> $severity" -ForegroundColor Red
         }
         else {
             # Parse the output
@@ -479,7 +480,6 @@ foreach ($target in $targets) {
             if ($null -eq $parsedValue) {
                 $severity = "warning"
                 $status = "Could not parse metric value"
-                Write-Host "  Metric: $metricName -> $severity (parse failed)" -ForegroundColor Yellow
             }
             else {
                 # Calculate severity
@@ -497,24 +497,14 @@ foreach ($target in $targets) {
                         }
                     }
                 }
-                
-                $color = switch ($severity) {
-                    'ok' { 'Green' }
-                    'warning' { 'Yellow' }
-                    'error' { 'Red' }
-                    default { 'White' }
-                }
-                Write-Host "  Metric: $metricName -> $severity ($status)" -ForegroundColor $color
             }
         }
         
         # Send to API
-        $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-            -Name $targetName -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL
-        if ($sent) {
-            Write-Host "    -> Reported to Dashboard" -ForegroundColor Gray
-        }
+        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+            -Name $targetName -Metric $metricName -Severity $severity -Status $status -TTL $defaultTTL | Out-Null
     }
+
     
     # Cleanup shell stream if used
     if ($null -ne $shellStream) {

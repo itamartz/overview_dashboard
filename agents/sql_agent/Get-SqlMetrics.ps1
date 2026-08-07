@@ -30,10 +30,15 @@
 
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = "$PSScriptRoot\config.json",
+    [string]$ConfigPath,
     [switch]$DryRun,
     [switch]$MockRun
 )
+
+if (-not $ConfigPath) {
+    $ConfigPath = Join-Path $PSScriptRoot "config.json"
+}
+
 
 # Shared functions: Send-ToApi, Get-CyberArkCredential, Get-EncryptedCredential, Resolve-Credential, Install-ModuleIfNeeded
 Import-Module (Join-Path $PSScriptRoot '..\shared\functions.psm1') -Force
@@ -271,11 +276,8 @@ foreach ($db in $databases) {
     Write-Host "  State: $dbState -> $stateSeverity" -ForegroundColor $stateColor
     
     if (-not $DryRun) {
-        $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-            -Name $serverName -Database $dbName -Metric "State" -Severity $stateSeverity -Status $dbState -TTL $defaultTTL
-        if ($sent) {
-            Write-Host "    -> Reported" -ForegroundColor Gray
-        }
+        Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+            -Name $serverName -Database $dbName -Metric "State" -Severity $stateSeverity -Status $dbState -TTL $defaultTTL | Out-Null
     }
     
     # Report Last Backup
@@ -284,35 +286,19 @@ foreach ($db in $databases) {
             -WarningHours $backupWarningHours -ErrorHours $backupErrorHours
         $backupAge = Format-BackupAge -LastBackup $db.LastFullBackup
         
-        $backupColor = switch ($backupSeverity) {
-            'ok' { 'Green' }
-            'warning' { 'Yellow' }
-            'error' { 'Red' }
-            default { 'White' }
-        }
-        
-        Write-Host "  Backup: $backupAge -> $backupSeverity" -ForegroundColor $backupColor
-        
         if (-not $DryRun) {
-            $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-                -Name $serverName -Database $dbName -Metric "Last Backup" -Severity $backupSeverity -Status $backupAge -TTL $defaultTTL
-            if ($sent) {
-                Write-Host "    -> Reported" -ForegroundColor Gray
-            }
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+                -Name $serverName -Database $dbName -Metric "Last Backup" -Severity $backupSeverity -Status $backupAge -TTL $defaultTTL | Out-Null
         }
     }
     else {
-        Write-Host "  Backup: No backup found -> error" -ForegroundColor Red
-        
         if (-not $DryRun) {
-            $sent = Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
-                -Name $serverName -Database $dbName -Metric "Last Backup" -Severity "error" -Status "No backup" -TTL $defaultTTL
-            if ($sent) {
-                Write-Host "    -> Reported" -ForegroundColor Gray
-            }
+            Send-ToApi -ApiUrl $apiUrl -SystemName $systemName -ProjectName $projectName `
+                -Name $serverName -Database $dbName -Metric "Last Backup" -Severity "error" -Status "No backup" -TTL $defaultTTL | Out-Null
         }
     }
 }
+
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan

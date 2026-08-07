@@ -316,11 +316,23 @@ foreach ($target in $config.targets) {
         # --- ESXi Hosts ---
         $hosts = Get-VMHost
         foreach ($esxi in $hosts) {
+            $cpuUsagePercent = 0
+            if ($esxi.CpuTotalMhz -gt 0) {
+                $cpuUsagePercent = [math]::Round(($esxi.CpuUsageMhz / $esxi.CpuTotalMhz) * 100, 1)
+            }
+
+            $memoryUsagePercent = 0
+            if ($esxi.MemoryTotalGB -gt 0) {
+                $memoryUsagePercent = [math]::Round(($esxi.MemoryUsageGB / $esxi.MemoryTotalGB) * 100, 1)
+            }
+
             $esxiObj = @{
-                Id = "$($target.name)-$($esxi.Name)"
-                Name = $esxi.Name
-                TTL = $config.defaultTTL
-                ConnectionState = $esxi.ConnectionState.ToString()
+                Id                  = "$($target.name)-$($esxi.Name)"
+                Name                = $esxi.Name
+                TTL                 = $config.defaultTTL
+                ConnectionState     = $esxi.ConnectionState.ToString()
+                CpuUsagePercent     = "$cpuUsagePercent%"
+                MemoryUsagePercent  = "$memoryUsagePercent%"
             }
             
             $esxiCert = Get-X509Certificate2Web -ComputerName $esxi.Name
@@ -331,10 +343,24 @@ foreach ($target in $config.targets) {
             if ($esxiObj.CertificateState -ne 'Ok') { $esxiSev = Compare-Severity -Current $esxiSev -New $esxiObj.CertificateState }
             if ($esxiObj.ConnectionState -ne 'Connected') { $esxiSev = 'Error' }
             if ($esxiObj.VMnicStatus -ne 'Ok') { $esxiSev = 'Error' }
+
+            # Evaluate thresholds for CPU and Memory (Warning >= 85%, Error >= 95%)
+            $cpuWarning = if ($target.cpuWarningThreshold) { [double]$target.cpuWarningThreshold } else { 85 }
+            $cpuError   = if ($target.cpuErrorThreshold) { [double]$target.cpuErrorThreshold } else { 95 }
+            $memWarning = if ($target.memWarningThreshold) { [double]$target.memWarningThreshold } else { 85 }
+            $memError   = if ($target.memErrorThreshold) { [double]$target.memErrorThreshold } else { 95 }
+
+            if ($cpuUsagePercent -ge $cpuError -or $memoryUsagePercent -ge $memError) {
+                $esxiSev = 'Error'
+            }
+            elseif (($cpuUsagePercent -ge $cpuWarning -or $memoryUsagePercent -ge $memWarning) -and $esxiSev -ne 'Error') {
+                $esxiSev = Compare-Severity -Current $esxiSev -New 'Warning'
+            }
             
             $esxiObj.Severity = $esxiSev.ToLower()
             Send-ToApi -ApiUrl $config.apiUrl -SystemName $config.systemName -ProjectName "ESXI" -Payload $esxiObj -DryRun:$DryRun
         }
+
 
         # --- VMs ---
         $vms = Get-VM | Where-Object { $_.PowerState -eq 'PoweredOn' }
